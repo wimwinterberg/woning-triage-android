@@ -1,6 +1,6 @@
 # Acceptatie en testplan
 
-Versie 0.1 · 15 september 2026 · **Alle scenario's zijn gepland, nog niet uitgevoerd.**
+Versie 0.2 · 15 september 2026 · **Alle scenario's zijn gepland, nog niet uitgevoerd.**
 
 Dit document geeft criteria voor implementatie en pilot. Het is geen testrapport. Functionele beschrijvingen staan in de [Android-specificatie](ANDROID_SPEC.md), [backend-specificatie](BACKEND_SPEC.md) en [domeinspecificatie](TRIAGE_SPEC.md).
 
@@ -103,3 +103,23 @@ Meertalige gesprekken worden op betekenis en gedrag beoordeeld, niet op één ex
 **Pilot gereed:** echte beslisboom en contactbeleid beoordeeld, toegang en privacy ingericht, bewaartermijnen actief, afgesproken talen/apparaten getest en kosten-/foutmonitoring beschikbaar.
 
 Bij iedere gate wordt vastgelegd: build/commit, configuratieversies, datum, uitgevoerde scenario's, resultaat en resterende beperkingen. Geen gate is met deze documentatie al gehaald.
+
+## 7. Nieuwe scope: adres en definitief record
+
+| ID | Scenario | Verwachte uitkomst |
+| --- | --- | --- |
+| AD-01 | Postcode en huisnummer opgegeven | Backend zoekt op; app toont en leest volledig adres ter controle |
+| AD-02 | Meer dan één adres gevonden | Vraag toevoeging of kandidaatselectie; geen willekeurige keuze |
+| AD-03 | Geen match of providerstoring | Corrigeren/retry mogelijk; adres niet als verified markeren |
+| AD-04 | Bewoner bevestigt specifiek adres | Bewijs gekoppeld aan lookup, kandidaat en adresversie |
+| AD-05 | Adres wijzigt na bevestiging | Verificatie en samenvatting vervallen; opnieuw laten controleren |
+| AD-06 | Ander antwoord bevat los “ja” | Geen onbedoelde adres- of samenvattingbevestiging |
+| AD-07 | Probleem samengevat en gecontroleerd, adres geverifieerd | App laat backend één report creëren met adres, omschrijving en gespreksdetails |
+| AD-08 | Afronding dubbel verstuurd of response verloren | Eén report per intake; ID via GET terugvindbaar |
+| AD-09 | Opslaan report faalt | Geen confirmed-status of succesmelding; retry zonder duplicaat |
+| AD-10 | Bron bevat planning_duration | Geen duur in UI, prompt of report |
+| AD-11 | Inhoudelijke correctie tijdens afronden | Oude revisie geweigerd; juiste samenvatting opnieuw beoordelen |
+| AD-12 | Een latere lookup arriveert na gewijzigde adresinvoer | Verouderd resultaat niet toepassen |
+| AD-13 | Reportdetails controleren | Geordende berichten, correcties, LEDO en verificatiebewijs behouden; geen verzonnen ontbrekende transcripttekst |
+
+REQ-09 wordt gedekt door AT-19 en AD-07; REQ-10 door AD-01 t/m AD-06/AD-12; REQ-11 door AD-07 t/m AD-09/AD-11/AD-13; REQ-12 door AD-10. Deze tests zijn gepland, niet uitgevoerd.
