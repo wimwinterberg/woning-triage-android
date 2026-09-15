@@ -1,0 +1,175 @@
+openapi: 3.0.3
+info:
+  title: Woningtriage API
+  version: "1.0.0"
+  description: Eigen contract tussen Android-app en Symfony-backend. Dit zijn geen OpenAI-endpoints.
+servers:
+  - url: /api/v1
+paths:
+  /health:
+    get:
+      security: []
+      responses:
+        "200":
+          description: OK
+  /auth/activation:
+    post:
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        "200":
+          description: Bearer token issued once
+  /intakes:
+    post:
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                input_mode: { type: string, enum: [voice, text] }
+      responses:
+        "201": { description: Intake created }
+  /intakes/{id}:
+    get:
+      parameters:
+        - $ref: "#/components/parameters/IntakeId"
+      responses:
+        "200": { description: Canonical intake }
+        "404": { description: Hidden not found }
+  /intakes/{id}/messages:
+    post:
+      parameters:
+        - $ref: "#/components/parameters/IntakeId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "202": { description: Analysis task }
+  /intakes/{id}/fields:
+    patch:
+      parameters:
+        - $ref: "#/components/parameters/IntakeId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200": { description: Updated intake }
+  /intakes/{id}/language:
+    patch:
+      parameters:
+        - $ref: "#/components/parameters/IntakeId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200": { description: Language updated }
+  /intakes/{id}/summaries:
+    post:
+      parameters:
+        - $ref: "#/components/parameters/IntakeId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "202": { description: Summary task }
+  /intakes/{id}/confirmations:
+    post:
+      parameters:
+        - $ref: "#/components/parameters/IntakeId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200": { description: Confirmed intake with report_id }
+  /intakes/{id}/address-lookups:
+    post:
+      parameters:
+        - $ref: "#/components/parameters/IntakeId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200": { description: Candidates }
+        "503": { description: address_lookup_unavailable }
+  /intakes/{id}/address-verifications:
+    post:
+      parameters:
+        - $ref: "#/components/parameters/IntakeId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200": { description: Verified intake }
+  /intakes/{id}/cancel:
+    post:
+      parameters:
+        - $ref: "#/components/parameters/IntakeId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200": { description: Cancelled }
+  /intakes/{id}/voice-sessions:
+    post:
+      parameters:
+        - $ref: "#/components/parameters/IntakeId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201": { description: SDP answer }
+        "503": { description: GPT-Live unavailable }
+  /intakes/{id}/voice-sessions/{sessionId}:
+    get:
+      parameters:
+        - $ref: "#/components/parameters/IntakeId"
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Voice session status without SDP }
+  /intakes/{id}/voice-sessions/{sessionId}/stop:
+    post:
+      parameters:
+        - $ref: "#/components/parameters/IntakeId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202": { description: Closing }
+  /intakes/{id}/tasks/{taskId}:
+    get:
+      parameters:
+        - $ref: "#/components/parameters/IntakeId"
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Task }
+  /intakes/{id}/events:
+    get:
+      parameters:
+        - $ref: "#/components/parameters/IntakeId"
+        - name: Last-Event-ID
+          in: header
+          schema: { type: string }
+      responses:
+        "200":
+          description: Server-Sent Events
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string }
+    IntakeId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+security:
+  - bearer: []

@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=../vendor/symfony/dependency-injection/Loader/schema/services.schema.json
+parameters:
+    app.tree_dir: '%kernel.project_dir%/config/trees'
+    app.prompt_version: 'conversation-v1'
+    app.live_model: 'gpt-live-1'
+    env(OPENAI_API_KEY): ''
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Kernel.php'
+
+    App\Tree\TreeRepository:
+        arguments:
+            $treeDirectory: '%app.tree_dir%'
+
+    App\Command\ValidateTreeCommand:
+        arguments:
+            $treeDirectory: '%app.tree_dir%'
+
+    App\Live\LiveGatewayCommandQueue:
+        arguments:
+            $directory: '%kernel.project_dir%/var/live-gateway'
+
+    App\Service\IntakeService:
+        arguments:
+            $promptVersion: '%app.prompt_version%'
+
+    App\Live\HttpGptLiveClient:
+        arguments:
+            $apiKey: '%env(default::OPENAI_API_KEY)%'
+            $model: '%app.live_model%'
+
+    App\Command\LiveGatewayCommand:
+        arguments:
+            $apiKey: '%env(default::OPENAI_API_KEY)%'
+
+    App\Analyzer\IntakeAnalyzer: '@App\Analyzer\HeuristicIntakeAnalyzer'
+    App\Live\GptLiveClient: '@App\Live\HttpGptLiveClient'
+    App\Address\AddressProvider: '@App\Address\PdokAddressProvider'
+    App\Address\FakeAddressProvider:
+        public: true
+
+when@test:
+    services:
+        App\Live\GptLiveClient: '@App\Live\FakeGptLiveClient'
+        App\Address\AddressProvider: '@App\Address\FakeAddressProvider'
+
+when@dev:
+    services:
+        App\Live\GptLiveClient: '@App\Live\FakeGptLiveClient'
+        App\Address\AddressProvider: '@App\Address\FakeAddressProvider'

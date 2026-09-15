@@ -1,0 +1,49 @@
+{
+  "status": "success",
+  "data": {
+    "ledoData": [
+      {
+        "label": "Eengezinswoning",
+        "value": "woning_1",
+        "children": [
+          {
+            "label": "Keuken",
+            "value": "loc_keuken",
+            "children": [
+              {
+                "label": "Kraan",
+                "value": "el_kraan",
+                "children": [
+                  {
+                    "label": "Druppelt",
+                    "value": "def_druppel",
+                    "rm_competence_id": "comp_loodgieter",
+                    "planning_duration": 1.5
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "label": "Badkamer",
+            "value": "loc_badkamer",
+            "children": [
+              {
+                "label": "Kraan",
+                "value": "el_kraan",
+                "children": [
+                  {
+                    "label": "Lekt",
+                    "value": "def_lekt",
+                    "rm_competence_id": "comp_loodgieter",
+                    "planning_duration": 2.0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

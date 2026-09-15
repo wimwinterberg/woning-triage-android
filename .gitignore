@@ -1,0 +1,8 @@
+.DS_Store
+*.log
+backend/var/
+backend/vendor/
+backend/.phpunit.cache/
+android/.gradle/
+android/**/build/
+android/local.properties
