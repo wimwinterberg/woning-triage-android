@@ -1,6 +1,6 @@
 # Specificatie Android-app
 
-Versie 0.1 · 15 september 2026 · Status: voorgesteld ontwerp; geen implementatie.
+Versie 0.2 · 15 september 2026 · Status: voorgesteld ontwerp; geen implementatie.
 
 Gerelateerd: [projectoverzicht](PROJECT_OVERVIEW.md), [LEDO en beslisboom](TRIAGE_SPEC.md), [API-contract](API_CONTRACT.md), [testplan](ACCEPTANCE.md).
 
@@ -67,11 +67,11 @@ Toon:
 
 Een samenvatting is gebonden aan een revisie. Bij een nieuw antwoord of correctie vervalt de eerdere bevestigingsmogelijkheid totdat de nieuwe samenvatting is geladen.
 
-Voor de eerste versie is de knop de formele bevestiging. Een gesproken “ja” alleen rondt niet zelfstandig af. De assistent mag de gebruiker in diens taal naar de knop begeleiden. TalkBack moet de knop volledig bruikbaar maken.
+Voorgesteld gedrag: een expliciete bevestiging van de actuele samenvatting kan gesproken of via de knop plaatsvinden. Bij een gesproken bevestiging koppelt de app die aan de actuele summary-ID en revisie; een los “ja” buiten die context is onvoldoende. De app laat daarna via de backend het definitieve meldingsrecord aanmaken. TalkBack moet de knop volledig bruikbaar maken.
 
 ### A-06 — Afgerond
 
-Toon **Intake opgeslagen**, dossiernummer en korte samenvatting. Beloof geen reparatie, terugbelmoment of verstuurde werkbon zonder daadwerkelijke backendbevestiging van die actie. In deze scope is alleen opslag voorzien.
+Toon **Melding opgeslagen**, het door de backend geretourneerde meldingsnummer, geverifieerd adres en korte samenvatting. Beloof geen reparatie, terugbelmoment of verstuurde werkbon zonder daadwerkelijke backendbevestiging van die actie. In deze scope wordt het definitieve meldingsrecord opgeslagen; externe verzending of planning is niet voorzien.
 
 Acties: **Nieuwe melding** en terug naar het startscherm. Microfoon, audio en liveverbinding zijn gesloten. Een bevestigde intake is in deze eerste versie alleen-lezen.
 
@@ -172,3 +172,13 @@ Bij implementatie: Gradle wrapper, vastgelegde dependencyversies, debug/release-
 Android is gereed voor de pilot als de scenario's A-01 t/m A-07, NL-opening, taalwisseling, microfoonweigering, mute, achtergrondgedrag, rotatie, onderbreken, bevestigen en netwerkherstel aantoonbaar werken. Minimaal één echte telefoon en één tablet worden gebruikt; het definitieve apparaatprofiel is OPEN-08.
 
 Zie [ACCEPTANCE.md](ACCEPTANCE.md) voor de controleerbare scenario's en nog niet uitgevoerde tests.
+
+## 11. Adres verzamelen en verifiëren
+
+Voeg vóór de eindcontrole een adresstap toe, via gesprek of invoervelden. Verzamel postcode en huisnummer, vraag een toevoeging alleen waar nodig. Ondersteun dat een bewoner adresgegevens al tijdens de probleembeschrijving noemt. De backend zoekt op; het model verzint geen straat of woonplaats.
+
+Toon het volledige gevonden adres en laat de agent dit in de gesprekstaal ter controle voorleggen. Een expliciete gesproken bevestiging of knop bevestigt precies de getoonde kandidaat. Bij meerdere adressen vraagt de app om de toevoeging of laat ze kandidaten kiezen. Bij nul resultaten corrigeert de bewoner de invoer. Bij storing blijft de intake bewaard, maar wordt geen geverifieerd adres gesuggereerd.
+
+Een wijziging van postcode, huisnummer, toevoeging of kandidaat trekt de eerdere adresverificatie en samenvatting in. Eindcontrole toont probleem én adres. Als alles is gecontroleerd, roept de app de afrondingsroute aan. Bij timeout controleert zij de status en herhaalt zo nodig met dezelfde idempotentiesleutel. Nooit een succesmelding uitsluitend op basis van uitgesproken modeltekst.
+
+Geen verwachte reparatieduur op enig scherm. De definitieve melding bevat gespreksdetails; informeer de bewoner daarover in de start-/privacyuitleg. Verifieer adres niet opnieuw bij een ongerelateerde probleemcorrectie zolang de adresversie gelijk blijft.
