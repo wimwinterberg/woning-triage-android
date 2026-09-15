@@ -1,6 +1,6 @@
 # API-contract Android ↔ Symfony
 
-Versie 0.1 · 15 september 2026 · Status: voorgesteld eigen applicatiecontract, nog niet geïmplementeerd.
+Versie 0.2 · 15 september 2026 · Status: voorgesteld eigen applicatiecontract, nog niet geïmplementeerd.
 
 **Dit zijn geen OpenAI-endpoints.** De backend schermt het providerprotocol af. Exacte GPT-Live-handshake en providerconfiguratie worden in fase 1 vastgesteld. De voorbeelden zijn fictief.
 
@@ -30,7 +30,9 @@ Iedere fout heeft een machineleesbare code, gebruikersvriendelijke tekst en `req
 | PATCH | `/intakes/{id}/fields` | Expliciete veldcorrectie | `200` + intake |
 | PATCH | `/intakes/{id}/language` | Automatisch/handmatig taalgedrag | `200` + intake |
 | POST | `/intakes/{id}/summaries` | Samenvatting aanvragen | `202` + taak |
-| POST | `/intakes/{id}/confirmations` | Exacte samenvatting bevestigen | `200` + intake |
+| POST | `/intakes/{id}/confirmations` | Samenvatting bevestigen en definitief meldingsrecord creëren | `200` + intake met `report_id` |
+| POST | `/intakes/{id}/address-lookups` | Volledig adres opzoeken | `200` + kandidaten en actuele revisie |
+| POST | `/intakes/{id}/address-verifications` | Gekozen adres door bewoner laten bevestigen | `200` + intake |
 | POST | `/intakes/{id}/cancel` | Dossier annuleren | `200` + intake |
 | POST | `/intakes/{id}/voice-sessions` | Spraakverbinding aanvragen | `201` + eigen sessieconfiguratie |
 | GET | `/intakes/{id}/voice-sessions/{sessionId}` | Verbindingsstatus ophalen | `200` + voice session |
@@ -177,7 +179,7 @@ POST `/confirmations`:
 }
 ```
 
-Bij succes wordt het dossier `confirmed` met revisie 8 en `confirmed_at`. De bevestigingsregistratie bewaart bronrevisie 7 en summary-ID. Response `200` betekent opgeslagen intake; er is geen automatische werkbonverzending in dit contract.
+Bij succes wordt het dossier `confirmed` met revisie 8 en `confirmed_at`. De bevestigingsregistratie bewaart bronrevisie 7 en summary-ID. Response `200` betekent dat één definitief meldingsrecord met alle gespreksdetails atomair is aangemaakt; `report_id` staat in de intake-response. Er is geen automatische externe werkbonverzending in dit contract.
 
 `409 summary_stale` of `revision_conflict` vereist een nieuwe beoordeling. Een retry van hetzelfde succesvolle verzoek met dezelfde idempotentiesleutel retourneert het originele succesvolle resultaat, ook al is de actuele revisie inmiddels verhoogd.
 
@@ -271,3 +273,27 @@ Android vertaalt machinecodes naar ondersteunde UI-talen. Retry uitsluitend wann
 ## 12. Contractverificatie bij implementatie
 
 Dit leesbare contract wordt omgezet naar OpenAPI en gedeelde fixtures vóór het schrijven van productieverzoeken. Valideer minimaal enums, nullability, foutcodes, objecteigendom, idempotentie, datumformaat en samenvattingrevisies. Providerpayloads horen niet in die publieke fixtures.
+
+## 13. Adrescontract en report (versie 0.2)
+
+Alle intake-responses krijgen `address` (initieel `null`) en `report_id` (initieel `null`). Een niet-geverifieerd adres blokkeert samenvatting voor afronding en bevestiging met `422 address_not_verified`.
+
+POST `/intakes/{id}/address-lookups` gebruikt `Idempotency-Key` en deze body:
+
+```json
+{"expected_revision": 2, "postcode": "1234 AB", "house_number": 12, "addition": null}
+```
+
+De voorbeelden zijn fictieve invoer, geen bestaand geverifieerd adres. De server verhoogt de revisie zodra gewijzigde adresinvoer wordt geaccepteerd, trekt oude verificatie in en bewaart lookup-ID en invoer. Een providerresultaat mag alleen aan die adresversie gekoppeld worden. Response bevat `lookup_id`, `revision`, `address_revision` en `candidates`. Iedere kandidaat bevat `candidate_id`, `postcode`, `house_number`, `addition`, `street`, `city`, `country_code` en `display_address`. Een lege lijst is een geldige lookup zonder match; meerdere kandidaten vereisen selectie. Providerfout geeft `503 address_lookup_unavailable`; een oudere lookup geeft `409 address_lookup_stale`.
+
+POST `/intakes/{id}/address-verifications`:
+
+```json
+{"expected_revision": 3, "lookup_id": "lookup_example", "candidate_id": "candidate_example", "address_revision": 1, "confirmation_channel": "voice", "evidence_message_id": "message_address_yes"}
+```
+
+De kandidaat moet bij de actuele lookup en intake horen. Bij `voice` verwijst bewijs naar een expliciet antwoord op precies die adresvraag. Bij `ui` is `evidence_message_id` null en registreert de server de geauthenticeerde klik. Dit verifieert bewonersacceptatie van het adres, niet identiteit. De server retourneert intake met `address.verification_status=verified` en verhoogde revisie.
+
+De confirmation-body uit §7 accepteert aanvullend `confirmation_channel` (`voice` of `ui`) en bij voice `evidence_message_id`. De server controleert bewijscontext en summary-ID; een gesproken “ja” bij adrescontrole kan niet ook de probleemsamenvatting bevestigen. Dit is het ontwerp voor natuurlijke afronding, geen verplicht extra formulier.
+
+Na succesvolle afronding bevat GET intake altijd hetzelfde `report_id`. De backend bewaart alle details zoals beschreven in TRIAGE_SPEC §11. `planning_duration` ontbreekt in intake- en reportresponses. Twee gelijktijdige afrondingsverzoeken leveren hoogstens één report op.
