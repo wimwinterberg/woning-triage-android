@@ -2,7 +2,7 @@
 
 Een zelfstandige Android-app die bewoners via een gesproken gesprek helpt een probleem in huis te beschrijven. De intake gebruikt **LEDO: Locatie, Element, Defect, Oorzaak** en een vervangbare beslisboom. Het gesprek begint in het Nederlands en past zich aan de taal van de gebruiker aan.
 
-**Projectfase:** specificatie, versie 0.1 — 15 september 2026. Er is nog geen app, backend of werkende GPT-Live-koppeling geïmplementeerd. De definitieve beslisboom wordt later door Wim aangeleverd.
+**Projectfase:** specificatie, versie 0.2 — 15 september 2026. Er is nog geen app, backend of werkende GPT-Live-koppeling geïmplementeerd. De classificatieboom `beslisboom-prod.json` is aangeleverd; gespreks- en spoedregels worden aanvullend uitgewerkt.
 
 ## Documentatie
 
@@ -35,3 +35,7 @@ Deze applicatiemappen worden bij de implementatie toegevoegd. Documentatie maakt
 - De bewoner bevestigt de exacte dossier-versie voordat de intake wordt afgerond.
 - OpenAI-sleutels staan uitsluitend op de server.
 - Geen echte bewonersgegevens, opnamen of geheimen in deze repository.
+
+## Aangescherpt doel
+
+Het eindresultaat is één melding met een duidelijke Nederlandse werkomschrijving, een door de bewoner gecontroleerd volledig adres en de gespreksdetails. De backend zoekt het adres op aan de hand van postcode, huisnummer en zo nodig toevoeging. Aan het einde wordt het probleem samengevat en maakt de app via de backend het definitieve record aan. Een conceptintake is nog geen definitieve melding. Reparatieduur is geen onderdeel van de app, samenvatting of het meldingsrecord.
