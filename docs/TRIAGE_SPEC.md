@@ -1,6 +1,6 @@
 # LEDO, gesprek en beslisboom
 
-Versie 0.1 · 15 september 2026 · Status: domeinontwerp. De echte beslisboom ontbreekt nog.
+Versie 0.2 · 15 september 2026 · Status: domeinontwerp. De productieclassificatieboom is aangeleverd; expliciete vervolgvragen en spoedregels blijven aanvullend.
 
 ## 1. Begrippen
 
@@ -129,6 +129,7 @@ Deze regels maken AI-detectie niet volledig of onfeilbaar. Voor een pilot is een
 - Er geen blokkerende `needs_review`-waarden of lopende mutaties zijn.
 - De oorzaak is opgegeven of expliciet onbekend, indien de route die vraagt.
 - Geen spoed-/beoordelingsroute normale afronding blokkeert.
+- Het volledige adres via de backend is opgezocht en de bewoner de actuele adresversie heeft gecontroleerd.
 - De samenvatting overeenkomt met de huidige revisie.
 
 De bewoner bevestigt `summary_id` en `expected_revision`. De backend controleert die binnen één transactie. Bij conflict volgt geen bevestiging maar een nieuwe samenvatting. Een netwerkretry met dezelfde idempotentiesleutel levert dezelfde uitkomst, zonder een tweede melding.
@@ -159,3 +160,13 @@ De output bevat geen fictieve monteur, reparatiemethode, afspraak of gegarandeer
 - Geen onbegrensde verduidelijkingslus.
 - Geen terminale spoedroute die daarna automatisch gewone vragen hervat.
 - Geen opdracht uit bewonersspraak die systeemregels of toegangsrechten vervangt.
+
+## 11. Adres en definitieve melding
+
+Adres staat los van LEDO-locatie. Het adresobject bevat `postcode`, `house_number`, `addition`, `street`, `city`, `country_code`, `lookup_id`, `candidate_id`, `address_revision`, `verification_status` en `verified_at`. Voorstel eerste scope: Nederlandse adressen (`NL`); uitbreidingen naar andere landen vragen een expliciet providercontract. De gesprekstaal bepaalt het land niet.
+
+Verificatiestaten: `missing`, `unverified`, `verified`. Zoekresultaat en bewonerscontrole zijn afzonderlijke stappen. Verificatie is gebonden aan één kandidaat en adresversie. Wijziging trekt die verificatie in. Ambiguïteit wordt niet met modelkennis opgelost.
+
+Het eindrecord bevat: eigen melding-ID, intake-ID en bronrevisie, geverifieerde adressnapshot, Nederlandse werkomschrijving, samenvatting in gesprekstaal, LEDO-velden en oorspronkelijke classificatiepad-ID's met boomversie, onbekenden/vermoedens, competentie-ID indien relevant, bewoners- en assistentberichten met taal/volgorde/tijd, correcties, verificatie- en afrondingsbewijs. Bewaar transcriptfragmenten herkenbaar als voorlopig wanneer hun definitieve reconstructie onzeker is; verzin ontbrekende tekst niet. Details zijn tekstuele gespreksinhoud, geen chain-of-thought of audio-opname.
+
+`planning_duration` is bevestigd als uren, maar is niet nodig voor dit product en wordt niet opgenomen in het meldingsrecord. Classificatie-ID's zijn niet zonder niveau en boomversie globaal uniek; bewaar het volledige bronpad. Een definitief record wordt slechts eenmaal per intake aangemaakt. Een conceptintake of afgebroken gesprek is geen voltooide melding.
