@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: woningtriage
+          POSTGRES_PASSWORD: woningtriage
+          POSTGRES_DB: woningtriage_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U woningtriage -d woningtriage_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: pdo_pgsql, intl, mbstring, xml, zip
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist
+        working-directory: backend
+      - run: php bin/console doctrine:migrations:migrate --no-interaction --env=test
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://woningtriage:woningtriage@127.0.0.1:5432/woningtriage_test?serverVersion=16&charset=utf8
+          APP_SECRET: test-secret
+      - run: php bin/phpunit
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://woningtriage:woningtriage@127.0.0.1:5432/woningtriage_test?serverVersion=16&charset=utf8
+          APP_SECRET: test-secret
+      - run: php bin/console woningtriage:validate-tree --env=test
+        working-directory: backend
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - run: chmod +x gradlew
+        working-directory: android
+      - run: ./gradlew --no-daemon lintDebug testDebugUnitTest assembleDebug
+        working-directory: android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: woningtriage-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk

@@ -1,0 +1,142 @@
+{
+  "version": "demo-ledo-1",
+  "status": "published",
+  "active": true,
+  "owner": "woningtriage-demo",
+  "demo": true,
+  "max_clarifications": 3,
+  "start": "opening",
+  "nodes": {
+    "opening": {
+      "kind": "question",
+      "target": null,
+      "semantic": "Wat is er aan de hand in uw woning?",
+      "texts": {
+        "nl-NL": "Wat is er aan de hand in uw woning?",
+        "en-GB": "What is going on in your home?"
+      },
+      "answer_types": ["free_text"],
+      "unknown_allowed": false,
+      "unknown_required": false,
+      "transitions": [
+        {"when": {"equals": {"field": "location.state", "value": "unknown"}}, "to": "terminal_review"},
+        {"when": {"equals": {"field": "element.state", "value": "unknown"}}, "to": "terminal_review"},
+        {"when": {"all": [{"exists": "location"}, {"exists": "element"}, {"exists": "defect"}, {"any": [{"equals": {"field": "cause.state", "value": "reported"}}, {"equals": {"field": "cause.state", "value": "unknown"}}]}, {"equals": {"field": "address.verification_status", "value": "verified"}}]}, "to": "terminal_summary"},
+        {"when": {"all": [{"exists": "location"}, {"exists": "element"}, {"exists": "defect"}, {"any": [{"equals": {"field": "cause.state", "value": "reported"}}, {"equals": {"field": "cause.state", "value": "unknown"}}]}]}, "to": "ask_address"},
+        {"when": {"all": [{"exists": "location"}, {"exists": "element"}, {"exists": "defect"}]}, "to": "ask_cause"},
+        {"when": {"all": [{"exists": "location"}, {"exists": "element"}]}, "to": "ask_defect"},
+        {"when": {"exists": "location"}, "to": "ask_element"},
+        {"when": {"always": true}, "to": "ask_location"}
+      ]
+    },
+    "ask_location": {
+      "kind": "question",
+      "target": "location",
+      "semantic": "In welke ruimte bevindt het probleem zich?",
+      "texts": {
+        "nl-NL": "In welke ruimte bevindt het probleem zich?",
+        "en-GB": "In which room is the problem?"
+      },
+      "answer_types": ["free_text"],
+      "unknown_allowed": true,
+      "transitions": [
+        {"when": {"equals": {"field": "location.state", "value": "unknown"}}, "to": "terminal_review"},
+        {"when": {"exists": "location"}, "to": "ask_element"},
+        {"when": {"always": true}, "to": "ask_location"}
+      ]
+    },
+    "ask_element": {
+      "kind": "question",
+      "target": "element",
+      "semantic": "Welk onderdeel is betrokken?",
+      "texts": {
+        "nl-NL": "Welk onderdeel is betrokken?",
+        "en-GB": "Which part is involved?"
+      },
+      "answer_types": ["free_text"],
+      "unknown_allowed": true,
+      "transitions": [
+        {"when": {"equals": {"field": "element.state", "value": "unknown"}}, "to": "terminal_review"},
+        {"when": {"exists": "element"}, "to": "ask_defect"},
+        {"when": {"always": true}, "to": "ask_element"}
+      ]
+    },
+    "ask_defect": {
+      "kind": "question",
+      "target": "defect",
+      "semantic": "Wat ziet of hoort u precies?",
+      "texts": {
+        "nl-NL": "Wat ziet of hoort u precies?",
+        "en-GB": "What exactly do you see or hear?"
+      },
+      "answer_types": ["free_text"],
+      "unknown_allowed": false,
+      "unknown_required": false,
+      "transitions": [
+        {"when": {"exists": "defect"}, "to": "ask_cause"},
+        {"when": {"always": true}, "to": "ask_defect"}
+      ]
+    },
+    "ask_cause": {
+      "kind": "question",
+      "target": "cause",
+      "semantic": "Weet u waardoor het komt, of is de oorzaak onbekend?",
+      "texts": {
+        "nl-NL": "Weet u waardoor het komt, of is de oorzaak onbekend?",
+        "en-GB": "Do you know what caused it, or is the cause unknown?"
+      },
+      "answer_types": ["free_text", "unknown"],
+      "unknown_allowed": true,
+      "transitions": [
+        {"when": {"any": [{"equals": {"field": "cause.state", "value": "reported"}}, {"equals": {"field": "cause.state", "value": "unknown"}}]}, "to": "ask_address"},
+        {"when": {"always": true}, "to": "ask_cause"}
+      ]
+    },
+    "ask_address": {
+      "kind": "question",
+      "target": "address",
+      "semantic": "Wat is de postcode en het huisnummer van de woning?",
+      "texts": {
+        "nl-NL": "Wat is de postcode en het huisnummer van de woning?",
+        "en-GB": "What is the postcode and house number of the home?"
+      },
+      "answer_types": ["address"],
+      "unknown_allowed": false,
+      "unknown_required": false,
+      "transitions": [
+        {"when": {"equals": {"field": "address.verification_status", "value": "verified"}}, "to": "terminal_summary"},
+        {"when": {"always": true}, "to": "ask_address"}
+      ]
+    },
+    "terminal_summary": {
+      "kind": "terminal",
+      "outcome": "summary_possible",
+      "semantic": "Samenvatting is mogelijk.",
+      "texts": {
+        "nl-NL": "Ik vat het probleem samen zodat u het kunt controleren.",
+        "en-GB": "I will summarise the problem so you can check it."
+      },
+      "transitions": []
+    },
+    "terminal_review": {
+      "kind": "terminal",
+      "outcome": "human_review",
+      "semantic": "Menselijke beoordeling is nodig.",
+      "texts": {
+        "nl-NL": "We kunnen dit niet automatisch afronden. Er is geen medewerker ingeschakeld; dit is een demo.",
+        "en-GB": "We cannot complete this automatically. No staff member has been contacted; this is a demo."
+      },
+      "transitions": []
+    },
+    "terminal_out_of_scope": {
+      "kind": "terminal",
+      "outcome": "out_of_scope",
+      "semantic": "Buiten bereik van deze intake.",
+      "texts": {
+        "nl-NL": "Dit valt buiten wat deze demo kan vastleggen. Er is geen medewerker ingeschakeld.",
+        "en-GB": "This is outside what this demo can record. No staff member has been contacted."
+      },
+      "transitions": []
+    }
+  }
+}
