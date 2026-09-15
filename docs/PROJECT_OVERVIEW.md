@@ -1,6 +1,6 @@
 # Projectoverzicht — Woningtriage
 
-Versie 0.1 · 15 september 2026 · Status: ontwerpspecificatie, nog niet geïmplementeerd.
+Versie 0.2 · 15 september 2026 · Status: ontwerpspecificatie, nog niet geïmplementeerd.
 
 ## 1. Doel
 
@@ -20,7 +20,11 @@ Het resultaat is een bevestigd, gestructureerd intakedossier met een Nederlandse
 | REQ-04 | Doorvragen aan de hand van een beslisboom | Bevestigd door Wim |
 | REQ-05 | Nieuwe gesprekken beginnen in het Nederlands | Bevestigd door Wim |
 | REQ-06 | Automatisch aansluiten op de taal van de gebruiker | Bevestigd door Wim |
-| REQ-07 | Definitieve beslisboom wordt later aangeleverd | Bevestigd door Wim |
+| REQ-07 | Classificatieboom `beslisboom-prod.json` gebruiken | Aangeleverd; gespreksregels nog uitwerken |
+| REQ-09 | Duidelijke werkomschrijving als primair resultaat | Bevestigd door Wim |
+| REQ-10 | Postcode/huisnummer verzamelen, volledig adres via backend opzoeken en door bewoner verifiëren | Bevestigd door Wim |
+| REQ-11 | Aan het einde probleem samenvatten en via backend een record met gespreksdetails maken | Bevestigd door Wim |
+| REQ-12 | Reparatieduur niet gebruiken in de app | Bevestigd door Wim |
 | REQ-08 | Eerst volledige specificaties documenteren | Bevestigd door Wim |
 | DES-01 | Kotlin, Compose en Symfony in één repository | Voorgestelde technische basis |
 | DES-02 | Eén primair probleem per intake | Voorstel voor eerste versie |
@@ -90,7 +94,7 @@ De voorgestelde integratierichting is client delegation en WebRTC voor de app. E
 5. De backend verwerkt feitelijke voorstellen en bepaalt de volgende vraag.
 6. De bewoner kan op ieder moment corrigeren, dempen of stoppen.
 7. Bij voldoende informatie maakt de backend een samenvatting van één dossier-versie.
-8. De bewoner bevestigt of corrigeert. Alleen een serverbevestiging voltooit de intake.
+8. De bewoner controleert of corrigeert de samenvatting en het opgezochte adres. De app laat de backend één definitief meldingsrecord aanmaken; pas na serverbevestiging is de melding opgeslagen.
 
 Bij gevaarsignalen of blijvende onduidelijkheid kan de route eindigen in menselijke beoordeling. De concrete criteria en contactgegevens zijn nog niet geleverd. De app mag zonder werkelijke koppeling nooit zeggen dat een medewerker is ingeschakeld.
 
@@ -134,7 +138,7 @@ Dit zijn projectdoelen, geen garanties van OpenAI of Android. De proef bepaalt o
 | OPEN-07 | Definitieve appnaam, package-ID en branding | Distributie | Werknaam Woningtriage |
 | OPEN-08 | Minimale Android-versie en doelapparaten | Fase 1 | Voorstel Android 10+; telefoon en tablet |
 | OPEN-09 | Distributie: APK, besloten test of Play Store | Fase 4 | Besloten test |
-| OPEN-10 | Werkbondestination en adresgegevens | Na eerste versie | Alleen dossier opslaan; ruimte ≠ woonadres |
+| OPEN-10 | Adresprovider en eventuele externe werkbondestination | Adresprovider vóór pilot; externe koppeling later | Adreslookup en definitief meldingsrecord zijn in scope; ruimte ≠ woonadres |
 | OPEN-11 | Sessieduur, budget en prestatiegrenzen | Pilot | Configureerbaar; geen veronderstelde providerlimieten |
 | OPEN-12 | Database en langdurige verbindingsruntime | Fase 1 | PostgreSQL en Symfony-worker; bevestigen in proef |
 
@@ -143,3 +147,11 @@ Dit zijn projectdoelen, geen garanties van OpenAI of Android. De proef bepaalt o
 De eerste versie is pas gereed wanneer de relevante criteria in het [testplan](ACCEPTANCE.md) zijn aangetoond, er een installeerbare build is, backendconfiguratie is gedocumenteerd en de beperkingen expliciet zijn. Een succesvolle API-aanroep of overtuigend gesprek alleen is onvoldoende.
 
 Zie de [Android-specificatie](ANDROID_SPEC.md), [backend-specificatie](BACKEND_SPEC.md) en [domeinspecificatie](TRIAGE_SPEC.md) voor de uitwerking.
+
+## 11. Definitief resultaat en adres (scope 0.2)
+
+Naast de locatie binnen het gebouw wordt het woonadres verplicht vastgelegd. De app verzamelt postcode, huisnummer en zo nodig toevoeging. De backend levert het volledige adres terug; de bewoner controleert straat, nummer/toevoeging, postcode en woonplaats. Een gevonden adres is pas geverifieerd na bevestiging door de bewoner; dit is geen bewijs van diens identiteit of bewoning.
+
+De agent vat aan het einde het probleem samen. De app verstuurt daarna een afrondingsverzoek; de backend maakt één duurzaam meldingsrecord met het geverifieerde adres, de werkomschrijving, LEDO/classificatie, bewonersantwoorden, correcties en transcript. Conceptopslag tijdens het gesprek dient herstel en is geen definitieve melding.
+
+`planning_duration` wordt niet getoond, uitgevraagd of gebruikt voor beslissingen, planning of het meldingsrecord. Competentie kan bronmetadata blijven; de eerste versie plant geen reparatie. Met gespreksdetails bedoelen we in dit ontwerp de tekstuele inhoud, taal, sprekers en relevante gebeurtenissen, geen ruwe audio of interne modelredeneringen.
