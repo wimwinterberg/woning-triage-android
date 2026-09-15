@@ -1,6 +1,6 @@
 # Specificatie Symfony-backend
 
-Versie 0.1 · 15 september 2026 · Status: voorgesteld ontwerp; nog niet geïmplementeerd.
+Versie 0.2 · 15 september 2026 · Status: voorgesteld ontwerp; nog niet geïmplementeerd.
 
 Gerelateerd: [projectoverzicht](PROJECT_OVERVIEW.md), [domein](TRIAGE_SPEC.md), [API-contract](API_CONTRACT.md), [acceptatie](ACCEPTANCE.md).
 
@@ -25,7 +25,9 @@ Eén Symfony-codebase levert een HTTP-API en achtergrondprocessen. Een langlopen
 | `LiveSessionService` | Starts, stops, limieten en eigendom van spraaksessies |
 | `LiveGateway` | Provideradapter, delegaties, audio-/sessiecontext |
 | `SummaryService` | Samenvatting in gesprekstaal en Nederlandse omschrijving |
-| `ConfirmationService` | Exacte versie atomair bevestigen |
+| `ConfirmationService` | Exacte versie atomair bevestigen en één meldingsrecord aanmaken |
+| `AddressLookupService` | Postcode, huisnummer en toevoeging via adresprovider oplossen |
+| `AddressVerificationService` | Bewonerscontrole aan kandidaat en adresversie binden |
 | `IntakeEventPublisher` | App voorzien van revisiegebonden toestandupdates |
 | `RetentionWorker` | Verlopen gegevens verwijderen volgens beleid |
 
@@ -170,3 +172,15 @@ Deployments bevatten migraties, gevalideerde boomdefinities, promptversies en te
 - Praktijktests voor onderbreken, procesherstart, dubbele events en late resultaten.
 
 De backend is geen afgeronde koppeling zolang de langlopende GPT-Live-verbinding en delegatie niet werkelijk zijn aangetoond. Er zijn op dit moment nog geen van deze tests uitgevoerd.
+
+## 11. Adreslookup en aanmaken meldingsrecord
+
+De backend normaliseert postcode en valideert huisnummer/toevoeging, voert adreslookup uit via een configureerbare provider en retourneert nul, één of meerdere kandidaten. Providerkeuze en contract zijn nog open. Providercredentials blijven op de server. Neem straat en woonplaats uitsluitend uit een opgeslagen lookup-kandidaat over. Een verificatieaanvraag verwijst naar die kandidaat; door de client meegestuurde vrije adresvelden overschrijven deze niet.
+
+Sla postcode/huisnummer/toevoeging en de gekozen adressnapshot op, inclusief providerreferentie, lookup-tijd en bewonersverificatie. Bij gewijzigd adres vervallen eerdere verificatie en samenvatting. Geen adresgegevens in operationele logs. Een providerstoring heeft een herstelbare foutstatus en wordt nooit als succesvol adresresultaat weergegeven.
+
+Afronden vereist actuele samenvatting, bewonerscontrole, geverifieerd adres en geen nog lopende inhoudelijke analyse. De bestaande confirmation-route wordt het afrondingscommando: binnen één database-transactie creëert de backend het definitieve `report`-record, kopieert of immutable versiebindt alle gespreksdetails, registreert bevestiging en zet intake `confirmed`. Een unieke constraint op `report.intake_id` voorkomt een tweede record, ook bij een nieuwe retriesleutel. Bij mislukken van enige stap wordt alles teruggedraaid.
+
+Het record bevat de velden uit TRIAGE_SPEC §11. Het transcript wordt uit de servercontext samengesteld, niet door de client als volledige waarheid ingestuurd. Vóór afronden worden relevante ontvangen berichten verwerkt; ontbrekende of voorlopige transcriptdelen worden als zodanig gemarkeerd. Na vastleggen wordt de afrondingsreactie als apart gespreksevent toegevoegd zonder het bevestigde probleem/adres achteraf te veranderen. GET intake retourneert het resulterende `report_id` voor herstel na een timeout.
+
+`planning_duration` wordt bij bronimport hoogstens als ongebruikte broninformatie behouden; niet opgenomen in prompts, Android-responses of het report. Competentie-ID kan als classificatiemetadata mee. Er wordt geen planner of externe werkbonkoppeling gebouwd op basis van deze gegevens.
