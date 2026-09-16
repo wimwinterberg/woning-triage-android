@@ -192,6 +192,7 @@ final class IntakeService
                 $text,
                 $intake->getConversationLanguage(),
                 is_string($document->uiLanguage) ? $document->uiLanguage : null,
+                $document->uiLanguageOffer !== null,
             );
             if ($switch instanceof LanguageSwitchTool) {
                 $switch->apply($intake, $document);
@@ -327,6 +328,10 @@ final class IntakeService
                 $intake->setConversationLanguage($normalized);
                 $document->uiLanguage = $normalized;
                 $document->uiLanguageOffer = null;
+                $document->uiLanguageDeclined = array_values(array_filter(
+                    $document->uiLanguageDeclined,
+                    static fn (string $tag): bool => strcasecmp($tag, $normalized) !== 0,
+                ));
             }
             $intake->setLanguageMode($languageMode);
         } elseif ($acceptUiOffer === null) {
@@ -1431,6 +1436,8 @@ final class IntakeService
         $target = \App\Domain\UiLanguages::uiTagForConversation($intake->getConversationLanguage());
         $current = \App\Domain\UiLanguages::normalize((string) $document->uiLanguage) ?? \App\Domain\UiLanguages::DUTCH;
         if (strcasecmp($target, $current) === 0) {
+            $document->uiLanguageOffer = null;
+
             return;
         }
         if (in_array($target, $document->uiLanguageDeclined, true)) {
@@ -1486,15 +1493,21 @@ final class IntakeService
     private function isUiOfferYes(string $text): bool
     {
         $normalized = $this->normalizeSpokenConfirmation($text);
+        if (preg_match('/^(ja|yes|oui|si|sí|tak|evet|hai|sim|naam|aywa|ewa|ja graag)$/u', $normalized) === 1) {
+            return true;
+        }
 
-        return preg_match('/^(ja|yes|oui|si|sí|tak|evet|hai|sim|naam|aywa|ewa|ja graag)$/u', $normalized) === 1;
+        return preg_match('/^(ja|yes|oui)\b.{0,80}\b(app|scherm|screen|interface|umstellen|wechseln|omzetten)/u', $normalized) === 1;
     }
 
     private function isSpokenNo(string $text): bool
     {
         $normalized = $this->normalizeSpokenConfirmation($text);
+        if (preg_match('/^(nee|no|non|nein|hayir|hayır|nie|la|iie|nò|nao|não)$/u', $normalized) === 1) {
+            return true;
+        }
 
-        return preg_match('/^(nee|no|non|nein|hayir|hayır|nie|la|iie|nò|nao|não)$/u', $normalized) === 1;
+        return preg_match('/^(no|nee|nein|non)\b.{0,80}\b(keep|houden|lassen|screens|scherm|so bleiben)/u', $normalized) === 1;
     }
 
     private function isSpokenYes(string $text, bool $bareYes): bool

@@ -47,6 +47,7 @@ final class ResponsesLanguageSwitchAgentTest extends TestCase
         self::assertSame('function', $json['tools'][0]['type'] ?? null);
         self::assertStringContainsString('Current conversation language: nl-NL', (string) ($json['input'] ?? ''));
         self::assertStringContainsString('Switch to English', (string) ($json['input'] ?? ''));
+        self::assertStringContainsString('UI language offer pending: no', (string) ($json['input'] ?? ''));
         self::assertStringContainsString('switch_language', ResponsesLanguageSwitchAgent::instructions());
     }
 

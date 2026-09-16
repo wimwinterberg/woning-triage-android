@@ -160,7 +160,7 @@ private fun StartScreen(state: AppUiState, viewModel: AppViewModel) {
 private fun ConversationScreen(state: AppUiState, viewModel: AppViewModel) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { BrandTopBar() },
+        topBar = { BrandTopBar(onChangeLanguage = viewModel::openLanguagePicker) },
         bottomBar = {
             Column(
                 Modifier.fillMaxWidth().imePadding().navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp),
@@ -225,6 +225,13 @@ private fun ConversationScreen(state: AppUiState, viewModel: AppViewModel) {
 private fun AddressScreen(state: AppUiState, viewModel: AppViewModel) {
     PaperScaffold {
         BrandMark()
+        TextButton(
+            onClick = viewModel::openLanguagePicker,
+            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+        ) {
+            Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text(stringResource(R.string.change_language), modifier = Modifier.padding(start = 8.dp))
+        }
         Text(stringResource(R.string.lookup_address), style = MaterialTheme.typography.headlineLarge)
         state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         UseMyLocationButton(state, viewModel)
@@ -356,13 +363,21 @@ private fun PaperScaffold(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BrandTopBar() {
+private fun BrandTopBar(onChangeLanguage: (() -> Unit)? = null) {
     Column {
         TopAppBar(
             title = { BrandMark() },
+            actions = {
+                if (onChangeLanguage != null) {
+                    IconButton(onClick = onChangeLanguage) {
+                        Icon(Icons.Default.Language, contentDescription = stringResource(R.string.change_language))
+                    }
+                }
+            },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.background,
                 titleContentColor = MaterialTheme.colorScheme.onBackground,
+                actionIconContentColor = MaterialTheme.colorScheme.primary,
             ),
         )
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
@@ -661,7 +676,7 @@ private fun LanguagePickerDialog(current: String, onSelect: (String) -> Unit, on
 @Composable
 private fun UiLanguageOfferDialog(question: String, onYes: () -> Unit, onNo: () -> Unit) {
     AlertDialog(
-        onDismissRequest = onNo,
+        onDismissRequest = {},
         title = { Text(stringResource(R.string.change_language)) },
         text = { Text(question) },
         confirmButton = {

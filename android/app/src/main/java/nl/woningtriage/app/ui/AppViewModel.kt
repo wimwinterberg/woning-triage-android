@@ -384,15 +384,13 @@ class AppViewModel(
         try {
             val intake = _state.value.intake
             if (intake != null && _state.value.screen != Screen.Start) {
-                val updated = api.changeLanguage(
-                    intake.id,
-                    UUID.randomUUID().toString(),
+                val updated = patchLanguage(intake.id) { revision ->
                     nl.woningtriage.app.data.api.LanguagePatchRequest(
-                        expectedRevision = intake.revision,
+                        expectedRevision = revision,
                         mode = "manual",
                         language = normalized,
-                    ),
-                )
+                    )
+                }
                 applyLanguageIntake(updated)
             }
         } finally {
@@ -406,15 +404,13 @@ class AppViewModel(
     private fun answerUiOffer(accept: Boolean) = run("ui-offer") {
         val intake = _state.value.intake ?: return@run
         Log.i(LANG_TAG, "offer accept=$accept currentUi=${_state.value.uiLocale} offer=${intake.uiLanguageOffer}")
-        val updated = api.changeLanguage(
-            intake.id,
-            UUID.randomUUID().toString(),
+        val updated = patchLanguage(intake.id) { revision ->
             nl.woningtriage.app.data.api.LanguagePatchRequest(
-                expectedRevision = intake.revision,
+                expectedRevision = revision,
                 mode = "auto",
                 acceptUiOffer = accept,
-            ),
-        )
+            )
+        }
         if (accept) {
             val ui = updated.uiLanguage ?: _state.value.uiLocale
             tokens.uiLocale = ui
@@ -422,6 +418,23 @@ class AppViewModel(
         applyLanguageIntake(updated)
         if (accept) {
             recreateForLocale?.invoke(_state.value.uiLocale)
+        }
+    }
+
+    private suspend fun patchLanguage(
+        intakeId: String,
+        retried: Boolean = false,
+        body: (Int) -> nl.woningtriage.app.data.api.LanguagePatchRequest,
+    ): Intake {
+        val revision = _state.value.intake?.revision ?: throw IllegalStateException("Geen intake.")
+        return try {
+            api.changeLanguage(intakeId, UUID.randomUUID().toString(), body(revision))
+        } catch (error: retrofit2.HttpException) {
+            if (!retried && error.code() == 409) {
+                refresh(intakeId)
+                return patchLanguage(intakeId, retried = true, body = body)
+            }
+            throw error
         }
     }
 

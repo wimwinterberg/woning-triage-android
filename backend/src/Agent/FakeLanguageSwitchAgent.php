@@ -25,7 +25,7 @@ final class FakeLanguageSwitchAgent implements LanguageSwitchAgent
         self::$queue = [];
     }
 
-    public function decide(string $text, string $conversationLanguage, ?string $uiLanguage): ?LanguageSwitchTool
+    public function decide(string $text, string $conversationLanguage, ?string $uiLanguage, bool $offerPending = false): ?LanguageSwitchTool
     {
         if (self::$queue === []) {
             return null;

@@ -11,5 +11,5 @@ use App\Domain\LanguageSwitchTool;
  */
 interface LanguageSwitchAgent
 {
-    public function decide(string $text, string $conversationLanguage, ?string $uiLanguage): ?LanguageSwitchTool;
+    public function decide(string $text, string $conversationLanguage, ?string $uiLanguage, bool $offerPending = false): ?LanguageSwitchTool;
 }

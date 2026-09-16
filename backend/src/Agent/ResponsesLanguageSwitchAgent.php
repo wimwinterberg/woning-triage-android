@@ -22,7 +22,7 @@ final class ResponsesLanguageSwitchAgent implements LanguageSwitchAgent
     ) {
     }
 
-    public function decide(string $text, string $conversationLanguage, ?string $uiLanguage): ?LanguageSwitchTool
+    public function decide(string $text, string $conversationLanguage, ?string $uiLanguage, bool $offerPending = false): ?LanguageSwitchTool
     {
         if (($this->apiKey ?? '') === '') {
             return null;
@@ -41,7 +41,7 @@ final class ResponsesLanguageSwitchAgent implements LanguageSwitchAgent
                 'json' => [
                     'model' => $this->model,
                     'instructions' => self::instructions(),
-                    'input' => self::input($utterance, $conversationLanguage, $uiLanguage),
+                    'input' => self::input($utterance, $conversationLanguage, $uiLanguage, $offerPending),
                     'tools' => [LanguageSwitchTool::schema()],
                     'tool_choice' => 'auto',
                     'parallel_tool_calls' => false,
@@ -83,15 +83,17 @@ final class ResponsesLanguageSwitchAgent implements LanguageSwitchAgent
 You are the language-routing agent for Woningtriage. Your only capability is the switch_language function tool.
 Call switch_language when the resident asks to speak another language, asks to change the app screens or interface, or clearly starts speaking a different language than the current conversation language.
 Do not call the tool for ordinary intake answers in the current language, or for loanwords such as okay, ok, or oké.
-apply_ui must be true only if they asked to change the screens, interface, or product language. apply_ui must be false if they only asked the assistant to speak that language, or they simply started speaking it.
+apply_ui must be true when they asked to change the screens, interface, app language, or used switch/change/umstellen/wechseln/zet om. apply_ui must also be true when an offer popup is already pending and they ask for a different language.
+apply_ui must be false only when they clearly asked the assistant to speak that language, or they simply started speaking it without mentioning screens.
 Do not answer in text. Either call switch_language or return nothing.
 PROMPT;
     }
 
-    public static function input(string $utterance, string $conversationLanguage, ?string $uiLanguage): string
+    public static function input(string $utterance, string $conversationLanguage, ?string $uiLanguage, bool $offerPending = false): string
     {
         return "Current conversation language: {$conversationLanguage}\n"
             .'Current UI language: '.($uiLanguage ?? 'nl-NL')."\n"
+            .'UI language offer pending: '.($offerPending ? 'yes' : 'no')."\n"
             ."Resident utterance:\n".$utterance;
     }
 }

@@ -8,7 +8,7 @@ final class ConversationPrompt
 {
     public static function version(): string
     {
-        return 'conversation-v13';
+        return 'conversation-v14';
     }
 
     public static function text(bool $restore, string $language): string
@@ -57,7 +57,7 @@ Delegate to the backend when:
 Do not delegate to the backend when:
 - Alleen groeten, herhalen of een leenwoord zoals okay.
 
-Delegeer vóór je zegt dat de taal of de schermen zijn omgezet. Zet de interface niet zelf om. Zeg niet dat de schermen al zijn omgezet voordat de backend dat bevestigt.
+Delegeer vóór je zegt dat de taal of de schermen zijn omgezet. Zet de interface niet zelf om. Zeg nooit dat de schermen al zijn omgezet. Als de backend vraagt of de schermen omgezet mogen worden, stel die vraag en wacht. Bevestig een schermwissel alleen als de backend dat expliciet zegt.
 PROMPT;
     }
 }

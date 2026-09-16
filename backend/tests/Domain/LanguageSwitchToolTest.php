@@ -43,6 +43,19 @@ final class LanguageSwitchToolTest extends TestCase
         self::assertNull($document->uiLanguageOffer);
     }
 
+    public function testApplyUiClearsAPreviousDecline(): void
+    {
+        $document = IntakeDocument::initial(['id' => 'q1', 'text' => 'In welke ruimte?']);
+        $document->uiLanguageDeclined = ['de-DE'];
+        $document->uiLanguageOffer = ['language' => 'de-DE', 'reason' => 'detected'];
+        $intake = new Intake('intake_test', new User('user_test', 'resident'), 'tree-v1', 'conversation-v14', $document);
+        $tool = new LanguageSwitchTool('de-DE', true);
+        $tool->apply($intake, $document);
+        self::assertSame('de-DE', $document->uiLanguage);
+        self::assertNull($document->uiLanguageOffer);
+        self::assertSame([], $document->uiLanguageDeclined);
+    }
+
     public function testSpeakEnglishStyleCallDoesNotApplyUi(): void
     {
         $tool = LanguageSwitchTool::tryFromCall('switch_language', [

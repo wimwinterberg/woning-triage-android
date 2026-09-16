@@ -107,7 +107,8 @@ final class LiveFollowUpSpeech
 
     public static function uiLanguageOffer(string $question, string $language): string
     {
-        return self::sayExactly($question, $language);
+        return self::sayExactly($question, $language)
+            .' Do not say the app screens have already changed. Ask this question and wait for yes or no.';
     }
 
     public static function afterUiLanguageSwitchSpoken(string $language): string

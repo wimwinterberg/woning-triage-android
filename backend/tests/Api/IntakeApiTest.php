@@ -586,6 +586,109 @@ final class IntakeApiTest extends WebTestCase
         self::assertNull($intake['ui_language_offer']);
     }
 
+    public function testSwitchingSpeechBackClearsStaleUiOffer(): void
+    {
+        $intake = $this->postJson('/api/v1/intakes', $this->tokenA, [
+            'input_mode' => 'text',
+            'language' => 'en-GB',
+        ], 'create-en-stale', 201);
+        $this->enqueueLanguageSwitch('de-DE', false);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'de-offer',
+            'text' => 'Die Küche tropft seit gestern weil der Wasserhahn kaputt ist',
+        ], 'de-offer-msg', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('de-DE', $intake['conversation_language']);
+        self::assertSame('en-GB', $intake['ui_language']);
+        self::assertSame('de-DE', $intake['ui_language_offer']['language'] ?? null);
+
+        $this->enqueueLanguageSwitch('en-GB', false);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'en-clear',
+            'text' => 'Please speak English',
+        ], 'en-clear-msg', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('en-GB', $intake['conversation_language']);
+        self::assertSame('en-GB', $intake['ui_language']);
+        self::assertNull($intake['ui_language_offer']);
+    }
+
+    public function testSpokenYesSwitchTheAppAcceptsUiOffer(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $this->enqueueLanguageSwitch('en-GB', false);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'en-offer',
+            'text' => 'Please speak English',
+        ], 'en-offer-msg', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('en-GB', $intake['ui_language_offer']['language'] ?? null);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'yes-app',
+            'text' => 'Yes, switch the app',
+        ], 'yes-app-msg', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('en-GB', $intake['ui_language']);
+        self::assertNull($intake['ui_language_offer']);
+    }
+
+    public function testSpokenKeepScreensDeclinesUiOffer(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $this->enqueueLanguageSwitch('en-GB', false);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'en-offer-2',
+            'text' => 'Please speak English',
+        ], 'en-offer-2-msg', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'keep-screens',
+            'text' => 'No, keep the screens as they are',
+        ], 'keep-screens-msg', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('nl-NL', $intake['ui_language']);
+        self::assertSame('en-GB', $intake['conversation_language']);
+        self::assertNull($intake['ui_language_offer']);
+    }
+
+    public function testApplyUiAfterDeclineStillSwitchesScreens(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $this->enqueueLanguageSwitch('de-DE', false);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'de-first',
+            'text' => 'Bitte auf Deutsch',
+        ], 'de-first-msg', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        $declined = $this->patchJson('/api/v1/intakes/'.$intake['id'].'/language', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'mode' => 'auto',
+            'accept_ui_offer' => false,
+        ], 'de-no');
+        self::assertSame('nl-NL', $declined['ui_language']);
+        self::assertNull($declined['ui_language_offer']);
+
+        $this->enqueueLanguageSwitch('de-DE', true);
+        $this->postJson('/api/v1/intakes/'.$declined['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $declined['revision'],
+            'client_message_id' => 'de-ui',
+            'text' => 'Stellen Sie die Bildschirme auf Deutsch um',
+        ], 'de-ui-msg', 202);
+        $intake = $this->getIntake($declined['id'], $this->tokenA);
+        self::assertSame('de-DE', $intake['conversation_language']);
+        self::assertSame('de-DE', $intake['ui_language']);
+        self::assertNull($intake['ui_language_offer']);
+    }
+
     public function testGermanTurkishAndJapaneseSwitchAndStay(): void
     {
         $cases = [

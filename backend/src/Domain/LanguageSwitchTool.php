@@ -91,6 +91,11 @@ final class LanguageSwitchTool
         if ($this->applyUi) {
             $document->uiLanguage = UiLanguages::uiTagForConversation($this->language);
             $document->uiLanguageOffer = null;
+            $applied = $document->uiLanguage;
+            $document->uiLanguageDeclined = array_values(array_filter(
+                $document->uiLanguageDeclined,
+                static fn (string $tag): bool => strcasecmp($tag, (string) $applied) !== 0,
+            ));
         }
     }
 

@@ -82,4 +82,14 @@ final class LiveFollowUpSpeechTest extends TestCase
             LiveFollowUpSpeech::afterUiLanguageSwitchSpoken('en-GB'),
         );
     }
+
+    public function testUiOfferDoesNotClaimScreensChanged(): void
+    {
+        $text = LiveFollowUpSpeech::uiLanguageOffer(
+            'Sie sprechen Deutsch. Soll ich die App-Bildschirme auch auf Deutsch umstellen?',
+            'de-DE',
+        );
+        self::assertStringContainsString('Sie sprechen Deutsch', $text);
+        self::assertStringContainsString('Do not say the app screens have already changed', $text);
+    }
 }
