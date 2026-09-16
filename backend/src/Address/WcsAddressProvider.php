@@ -9,12 +9,14 @@ use App\Exception\AddressLookupUnavailableException;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
- * We Create Solutions Address API.
+ * We Create Solutions Address API. v1 supports Dutch (`nl`) addresses only.
  *
  * @see https://address-api.createsolutions.dev
  */
 final class WcsAddressProvider implements AddressProvider
 {
+    private const COUNTRY = 'nl';
+
     public function __construct(
         private readonly HttpClientInterface $httpClient,
         private readonly string $apiKey = '',
@@ -97,9 +99,12 @@ final class WcsAddressProvider implements AddressProvider
             $postalCode = $fallbackPostcode;
         }
 
-        $country = strtoupper(trim((string) ($item['country'] ?? 'nl')));
+        $country = strtolower(trim((string) ($item['country'] ?? self::COUNTRY)));
         if ($country === '') {
-            $country = 'NL';
+            $country = self::COUNTRY;
+        }
+        if ($country !== self::COUNTRY) {
+            return null;
         }
 
         $addition = $this->composeAddition($item);
@@ -119,7 +124,7 @@ final class WcsAddressProvider implements AddressProvider
             addition: $addition,
             street: $street,
             city: $city,
-            countryCode: $country,
+            countryCode: strtoupper(self::COUNTRY),
             providerId: $providerId,
         );
     }

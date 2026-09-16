@@ -191,7 +191,7 @@ De API is deploybaar op App Platform (PHP-buildpack, document root `public/`, ma
 | Idempotentie, eigendom, geen `planning_duration` in API/report | Getest |
 | Nederlandse opening / Engelse zin / “okay” | Heuristic analyzer + API-test |
 | GPT-Live WebRTC end-to-end | **Niet live bewezen** zonder account |
-| WCS Address API lookup | Geïmplementeerd (gemockte HTTP-tests); live niet bewezen zonder key |
+| WCS Address API lookup (NL) | Geïmplementeerd (gemockte HTTP-tests); live niet bewezen zonder key |
 | Productieboom 53 MB | Ontbreekt; fixture + importer aanwezig |
 | Spoedbeleid / echte medewerker | Open (OPEN-02); demo claimt geen inschakeling |
 

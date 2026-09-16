@@ -74,24 +74,54 @@ final class WcsAddressProviderTest extends TestCase
         self::assertSame('Damrak', $filtered[0]->street);
     }
 
-    public function testComposesLetterAdditionAndUnit(): void
+    public function testComposesLetterAndAdditionForDutchUnits(): void
     {
         $provider = new WcsAddressProvider($this->httpReturning(200, [[
-            'country' => 'be',
-            'postalCode' => '1000',
-            'houseNumber' => 1,
+            'country' => 'nl',
+            'postalCode' => '1012 JS',
+            'houseNumber' => 5,
             'houseLetter' => 'A',
             'houseNumberAddition' => 'bis',
-            'unitNumber' => '12',
-            'street' => 'Rue de la Loi',
-            'city' => 'Bruxelles',
+            'unitNumber' => null,
+            'street' => 'Damrak',
+            'city' => 'Amsterdam',
         ]]), 'test-key');
 
-        $candidates = $provider->lookup('1000', 1, null);
+        $candidates = $provider->lookup('1012 JS', 5, null);
         self::assertCount(1, $candidates);
-        self::assertSame('A bis 12', $candidates[0]->addition);
-        self::assertSame('BE', $candidates[0]->countryCode);
-        self::assertSame('be:1000:1:A:bis:12', $candidates[0]->providerId);
+        self::assertSame('A bis', $candidates[0]->addition);
+        self::assertSame('NL', $candidates[0]->countryCode);
+        self::assertSame('nl:1012 JS:5:A:bis:', $candidates[0]->providerId);
+    }
+
+    public function testIgnoresNonDutchResults(): void
+    {
+        $candidates = (new WcsAddressProvider($this->httpReturning(200, [
+            [
+                'country' => 'be',
+                'postalCode' => '1000',
+                'houseNumber' => 1,
+                'houseLetter' => null,
+                'houseNumberAddition' => null,
+                'unitNumber' => null,
+                'street' => 'Rue de la Loi',
+                'city' => 'Bruxelles',
+            ],
+            [
+                'country' => 'nl',
+                'postalCode' => '1071 BM',
+                'houseNumber' => 10,
+                'houseLetter' => null,
+                'houseNumberAddition' => null,
+                'unitNumber' => null,
+                'street' => 'Museumplein',
+                'city' => 'Amsterdam',
+            ],
+        ]), 'test-key'))->lookup('1071 BM', 10, null);
+
+        self::assertCount(1, $candidates);
+        self::assertSame('NL', $candidates[0]->countryCode);
+        self::assertSame('Museumplein', $candidates[0]->street);
     }
 
     public function testNotFoundReturnsEmptyList(): void
