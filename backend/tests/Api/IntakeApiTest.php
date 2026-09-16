@@ -258,6 +258,32 @@ final class IntakeApiTest extends WebTestCase
         self::assertNotContains($session['id'], $queue->pending());
     }
 
+    public function testGermanTurkishAndJapaneseSwitchAndStay(): void
+    {
+        $cases = [
+            ['de1', 'Die Küche tropft seit gestern weil der Wasserhahn kaputt ist', 'de-DE'],
+            ['tr1', 'Mutfaktaki musluk bozuk çünkü sızıyor', 'tr-TR'],
+            ['ja1', 'キッチンの蛇口が壊れています', 'ja-JP'],
+        ];
+        foreach ($cases as [$clientId, $text, $language]) {
+            $intake = $this->createIntake($this->tokenA);
+            $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+                'expected_revision' => 0,
+                'client_message_id' => $clientId,
+                'text' => $text,
+            ], $clientId.'-msg', 202);
+            $intake = $this->getIntake($intake['id'], $this->tokenA);
+            self::assertSame($language, $intake['conversation_language'], $text);
+            $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+                'expected_revision' => $intake['revision'],
+                'client_message_id' => $clientId.'ok',
+                'text' => 'okay',
+            ], $clientId.'-ok', 202);
+            $intake = $this->getIntake($intake['id'], $this->tokenA);
+            self::assertSame($language, $intake['conversation_language'], $language.' after okay');
+        }
+    }
+
     public function testCancelAndLockedIntake(): void
     {
         $intake = $this->createIntake($this->tokenA);

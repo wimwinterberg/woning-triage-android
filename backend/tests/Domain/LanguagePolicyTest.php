@@ -42,4 +42,60 @@ final class LanguagePolicyTest extends TestCase
         self::assertFalse($decision->changed);
         self::assertSame('nl-NL', $decision->language);
     }
+
+    public function testClearGermanSentenceSwitches(): void
+    {
+        $policy = new LanguagePolicy();
+        $decision = $policy->detectFromResidentText(
+            'Die Küche tropft seit gestern weil der Wasserhahn kaputt ist',
+            'nl-NL',
+            LanguageMode::Auto,
+        );
+        self::assertTrue($decision->changed);
+        self::assertSame('de-DE', $decision->language);
+    }
+
+    public function testClearTurkishSentenceSwitches(): void
+    {
+        $policy = new LanguagePolicy();
+        $decision = $policy->detectFromResidentText(
+            'Mutfaktaki musluk bozuk çünkü sızıyor',
+            'nl-NL',
+            LanguageMode::Auto,
+        );
+        self::assertTrue($decision->changed);
+        self::assertSame('tr-TR', $decision->language);
+    }
+
+    public function testClearJapaneseSentenceSwitches(): void
+    {
+        $policy = new LanguagePolicy();
+        $decision = $policy->detectFromResidentText(
+            'キッチンの蛇口が壊れています',
+            'nl-NL',
+            LanguageMode::Auto,
+        );
+        self::assertTrue($decision->changed);
+        self::assertSame('ja-JP', $decision->language);
+    }
+
+    public function testStaysInEnglishOnceSwitched(): void
+    {
+        $policy = new LanguagePolicy();
+        $decision = $policy->detectFromResidentText(
+            'The kitchen tap is leaking since yesterday because it is broken',
+            'en-GB',
+            LanguageMode::Auto,
+        );
+        self::assertFalse($decision->changed);
+        self::assertSame('en-GB', $decision->language);
+    }
+
+    public function testExplicitGermanRequest(): void
+    {
+        $policy = new LanguagePolicy();
+        self::assertSame('de-DE', $policy->isExplicitLanguageRequest('Bitte auf Deutsch'));
+        self::assertSame('tr-TR', $policy->isExplicitLanguageRequest('Türkçe konuş'));
+        self::assertSame('ja-JP', $policy->isExplicitLanguageRequest('Please speak Japanese'));
+    }
 }

@@ -184,7 +184,7 @@ final class HeuristicIntakeAnalyzer implements IntakeAnalyzer
         $trimmed = preg_replace('/^[^\p{L}]+/u', '', $trimmed) ?? $trimmed;
         $trimmed = preg_replace('/[\s.!?]+$/u', '', $trimmed) ?? $trimmed;
 
-        return (bool) preg_match('/^(ja|yes|ok|okay|oké|oke|klopt)$/u', $trimmed);
+        return (bool) preg_match('/^(ja|yes|ok|okay|oké|oke|klopt|evet|hai)$/u', $trimmed);
     }
 
     /**

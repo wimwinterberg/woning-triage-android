@@ -24,9 +24,11 @@ final class LiveGreeting
 
     public static function instructions(string $spoken): string
     {
-        return 'Speak Dutch. Greet immediately without waiting for the resident. '
+        return 'Greet immediately in Dutch without waiting for the resident. '
             .'Say this exactly, then pause and listen: '.$spoken
-            .' This is always a rental home. Never ask whether it is huur or koop.';
+            .' After that greeting, follow the resident language. If they speak a clear sentence in English, German, Turkish, Japanese or another language, reply in that language immediately and stay there. '
+            .'Do not switch back to Dutch after they change language. Loanwords such as okay do not count as a language switch. '
+            .'This is always a rental home. Never ask whether it is huur or koop.';
     }
 
     public static function commentary(string $spoken): string

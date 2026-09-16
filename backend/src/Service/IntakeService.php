@@ -1041,7 +1041,7 @@ final class IntakeService
             return false;
         }
 
-        return preg_match('/^(ja|yes|ok|okay|oke|klopt)\b/u', $normalized) === 1
+        return preg_match('/^(ja|yes|ok|okay|oke|klopt|evet|hai)\b/u', $normalized) === 1
             || preg_match('/\b(dat klopt|that(?:\'s| is) (correct|my address)|dat is mijn adres|gecontroleerd|rond\s*af|afronden|leg(?:\s+het)?\s+vast|vastleggen)\b/u', $normalized) === 1;
     }
 
