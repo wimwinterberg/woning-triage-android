@@ -67,6 +67,21 @@ class ClassificationNode
         $this->sourcePlanningDuration = $sourcePlanningDuration;
     }
 
+    public function getPathKey(): string
+    {
+        return $this->pathKey;
+    }
+
+    public function getLevel(): string
+    {
+        return $this->level;
+    }
+
+    public function getNormalizedLabel(): string
+    {
+        return $this->normalizedLabel;
+    }
+
     /**
      * @return array<string, mixed>
      */

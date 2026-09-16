@@ -26,6 +26,7 @@ final class ConversationPromptTest extends TestCase
         self::assertStringContainsString('adres afwijst', $text);
         self::assertStringContainsString('"Klopt"', $text);
         self::assertStringContainsString('De melding is vastgelegd', $text);
+        self::assertStringContainsString('gebouwtype is altijd een woning', $text);
         self::assertStringNotContainsString('koopwoning of huurwoning', $text);
     }
 }

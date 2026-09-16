@@ -14,7 +14,7 @@ final class SummaryComposer
     public function compose(Intake $intake): array
     {
         $document = $intake->document();
-        $location = $document->field(\App\Domain\FieldName::Location)->value ?? 'Onbekende locatie';
+        $location = $document->field(\App\Domain\FieldName::Location)->value ?? 'Onbekende ruimte';
         $element = $document->field(\App\Domain\FieldName::Element)->value ?? 'Onbekend element';
         $defect = $document->field(\App\Domain\FieldName::Defect)->value ?? 'Onbekend defect';
         $causeField = $document->field(\App\Domain\FieldName::Cause);

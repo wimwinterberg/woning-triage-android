@@ -60,7 +60,7 @@ Als een wijziging gevolgen heeft voor andere velden, toon kort: **Door deze wijz
 Toon:
 
 - Het probleem in de gesprekstaal.
-- Locatie, element, defect en oorzaak, inclusief onbekende gegevens.
+- Ruimte, element, defect en oorzaak, inclusief onbekende gegevens.
 - Eventuele markering dat menselijke beoordeling nodig is.
 - De Nederlandse omschrijving onder **Omschrijving voor de medewerker**, wanneer de gesprekstaal anders is.
 - **Aanpassen** en **Bevestigen**.
