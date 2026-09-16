@@ -800,6 +800,7 @@ final class IntakeService
             'provider' => $this->addressProvider::class,
             'candidate_count' => count($candidates),
             'narrowed_from' => $beforeNarrow,
+            'preferred_plain' => $beforeNarrow > 1 && count($candidates) === 1,
             'unique_claim' => (bool) ($hint['unique_claim'] ?? false),
         ]);
         $this->logger->info('Address lookup finished', [
@@ -850,7 +851,8 @@ final class IntakeService
             }
         }
 
-        if ((bool) ($hint['unique_claim'] ?? false) && count($matched) > 1) {
+        $additionSpecified = is_string($hint['addition'] ?? null) && trim((string) $hint['addition']) !== '';
+        if (!$additionSpecified && count($matched) > 1) {
             $plain = [];
             foreach ($matched as $candidate) {
                 $addition = $candidate['addition'] ?? null;
@@ -858,12 +860,42 @@ final class IntakeService
                     $plain[] = $candidate;
                 }
             }
-            if ($plain !== []) {
+            if (count($plain) === 1) {
+                $matched = $plain;
+            } elseif ((bool) ($hint['unique_claim'] ?? false) && $plain !== []) {
                 $matched = $plain;
             }
         }
 
-        return $matched;
+        return $this->uniqueCandidates($matched);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $candidates
+     * @return list<array<string, mixed>>
+     */
+    private function uniqueCandidates(array $candidates): array
+    {
+        $seen = [];
+        $unique = [];
+        foreach ($candidates as $candidate) {
+            $key = strtolower(trim((string) ($candidate['display_address'] ?? '')));
+            if ($key === '') {
+                $key = implode(':', [
+                    AddressNormalizer::compactPostcode((string) ($candidate['postcode'] ?? '')),
+                    (string) ($candidate['house_number'] ?? ''),
+                    strtolower(trim((string) ($candidate['street'] ?? ''))),
+                    strtolower(trim((string) ($candidate['addition'] ?? ''))),
+                ]);
+            }
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $unique[] = $candidate;
+        }
+
+        return $unique;
     }
 
     /**
