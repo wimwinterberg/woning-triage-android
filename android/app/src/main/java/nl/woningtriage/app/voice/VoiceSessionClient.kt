@@ -4,6 +4,8 @@ interface VoiceSessionClient {
     suspend fun prepareOffer(): String
     suspend fun applyRemoteAnswer(sdpAnswer: String)
     fun requestOpeningGreeting(openingQuestion: String) {}
+    fun speakFollowUp(thankYou: String, nextQuestion: String, language: String) {}
+    fun setOnConnectionLost(listener: (() -> Unit)?) {}
     fun setMuted(muted: Boolean)
     fun stop()
     val isSendingAudio: Boolean

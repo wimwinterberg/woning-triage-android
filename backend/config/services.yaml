@@ -1,11 +1,14 @@
 # yaml-language-server: $schema=../vendor/symfony/dependency-injection/Loader/schema/services.schema.json
 parameters:
     app.tree_dir: '%kernel.project_dir%/config/trees'
-    app.prompt_version: 'conversation-v9'
+    app.prompt_version: 'conversation-v10'
     app.live_model: 'gpt-live-1'
     env(OPENAI_API_KEY): ''
     env(WCS_ADDRESS_API_KEY): ''
     env(OPENAI_LIVE_VOICE): 'marin'
+    env(OPENAI_LIVE_SPEED): '1.0'
+    env(OPENAI_LIVE_IDLE_PROMPT_SECONDS): '60'
+    env(OPENAI_LIVE_IDLE_CLOSE_SECONDS): '180'
 
 services:
     _defaults:
@@ -40,6 +43,7 @@ services:
             $apiKey: '%env(default::OPENAI_API_KEY)%'
             $model: '%app.live_model%'
             $voice: '%env(default::OPENAI_LIVE_VOICE)%'
+            $speed: '%env(default::OPENAI_LIVE_SPEED)%'
 
     App\Live\GptLiveClient:
         factory: ['App\Live\GptLiveClientFactory', 'create']
@@ -52,6 +56,8 @@ services:
         arguments:
             $apiKey: '%env(default::OPENAI_API_KEY)%'
             $liveVoice: '%env(default::OPENAI_LIVE_VOICE)%'
+            $idlePromptSeconds: '%env(default::OPENAI_LIVE_IDLE_PROMPT_SECONDS)%'
+            $idleCloseSeconds: '%env(default::OPENAI_LIVE_IDLE_CLOSE_SECONDS)%'
 
     App\Analyzer\IntakeAnalyzer: '@App\Analyzer\HeuristicIntakeAnalyzer'
     App\Address\FakeAddressProvider:

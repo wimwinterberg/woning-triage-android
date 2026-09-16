@@ -115,6 +115,7 @@ final class DecisionTreeEngine
     {
         $texts = is_array($node['texts'] ?? null) ? $node['texts'] : [];
         $text = $this->localizedText($texts, $language)
+            ?? TreeQuestionTranslations::text((string) $node['id'], $language)
             ?? (is_string($texts['nl-NL'] ?? null) ? $texts['nl-NL'] : null)
             ?? $node['semantic']
             ?? $node['text']

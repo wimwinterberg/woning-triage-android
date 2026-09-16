@@ -11,6 +11,7 @@ internal object LiveGreeting {
             "Say this exactly, then pause and listen: $spoken " +
             "After that greeting, follow the resident language. If they speak a clear sentence in English, German, Turkish, Japanese or another language, reply in that language immediately and stay there. " +
             "Do not switch back to Dutch after they change language. Loanwords such as okay do not count as a language switch. " +
+            "Keep the same voice and a steady speaking speed; do not change voice, accent or pace. " +
             "This is always a rental home. Never ask whether it is huur or koop."
 
     fun commentary(spoken: String): String =

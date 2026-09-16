@@ -24,6 +24,12 @@ final class IntakePresenter
         $fields = [];
         foreach ($document->fields as $name => $field) {
             $fields[$name] = $field->toArray();
+            if (is_string($fields[$name]['value'] ?? null)) {
+                $fields[$name]['display_value'] = \App\Domain\LedoTerms::display(
+                    (string) $fields[$name]['value'],
+                    $intake->getConversationLanguage(),
+                );
+            }
         }
 
         $active = $this->entityManager->createQuery(
@@ -62,6 +68,7 @@ final class IntakePresenter
             'hypotheses' => $document->hypotheses,
             'risk' => $document->risk,
             'next_question' => $document->nextQuestion,
+            'spoken_follow_up' => $document->spokenFollowUp,
             'summary' => $document->summary,
             'address' => $address,
             'report_id' => $intake->getReportId(),

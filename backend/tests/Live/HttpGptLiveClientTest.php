@@ -35,6 +35,7 @@ final class HttpGptLiveClientTest extends TestCase
 
         self::assertSame('sess_1', $result->providerSessionId);
         self::assertSame('marin', $json['session']['audio']['output']['voice'] ?? null);
+        self::assertSame(1.0, $json['session']['audio']['output']['speed'] ?? null);
         self::assertArrayNotHasKey('format', $json['session']['audio'] ?? []);
         self::assertSame('marin', $client->voiceName());
     }

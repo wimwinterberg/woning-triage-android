@@ -23,9 +23,9 @@
     <string name="unknown">Unknown</string>
     <string name="needs_review">Needs review</string>
     <string name="possible_cause">Possible cause</string>
-    <string name="mute">Mute microphone</string>
-    <string name="unmute">Unmute microphone</string>
-    <string name="stop_conversation">Stop conversation</string>
+    <string name="mute">Mute</string>
+    <string name="unmute">Unmute</string>
+    <string name="stop_conversation">Stop</string>
     <string name="send">Send</string>
     <string name="type_answer">Type your answer</string>
     <string name="connecting">Connecting…</string>
@@ -41,7 +41,7 @@
     <string name="i_dont_know">I don\'t know</string>
     <string name="clear_field">Clear</string>
     <string name="verify_address">This is my address</string>
-    <string name="address_saved">Thank you. I have saved this address.</string>
+    <string name="address_saved">Saved</string>
     <string name="address_can_still_change">You can still change it later.</string>
     <string name="postcode">Postcode</string>
     <string name="house_number">House number</string>

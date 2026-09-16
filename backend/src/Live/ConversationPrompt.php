@@ -8,7 +8,7 @@ final class ConversationPrompt
 {
     public static function version(): string
     {
-        return 'conversation-v9';
+        return 'conversation-v10';
     }
 
     public static function text(bool $restore, string $language): string
@@ -43,7 +43,7 @@ Als de backend een samenvatting stuurt, lees die tekst voor en vraag of het klop
 Geef geen riskante reparatie-instructies. Zeg niet dat er een monteur is gestuurd.
 Delegeer naar de backend bij feiten, adresopzoek, bevestiging of dossierwijzigingen.
 Wacht op backend-commentaar voordat je zegt dat iets is opgeslagen. Herhaal niet dezelfde vraag als de backend al een nieuwe vraag stuurt.
-Noem nooit planningstijd of hersteltijd.
+Blijf bij één stem en een rustig gelijk tempo. Wissel niet van stem, accent of spreeksnelheid.
 PROMPT;
     }
 }

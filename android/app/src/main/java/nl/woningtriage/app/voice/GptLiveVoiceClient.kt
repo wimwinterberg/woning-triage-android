@@ -45,6 +45,7 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
     private var greetingSent: Boolean = false
     override var isSendingAudio: Boolean = false
         private set
+    private var onConnectionLost: (() -> Unit)? = null
 
     override suspend fun prepareOffer(): String {
         stop()
@@ -65,7 +66,7 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
         val iceServers = listOf(
             PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
         )
-        observer = ConnectionObserver()
+        observer = ConnectionObserver { onConnectionLost?.invoke() }
         peerConnection = factory?.createPeerConnection(PeerConnection.RTCConfiguration(iceServers), observer)
         audioSource = factory?.createAudioSource(MediaConstraints())
         audioTrack = factory?.createAudioTrack("audio0", audioSource)
@@ -97,6 +98,24 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
     override fun requestOpeningGreeting(openingQuestion: String) {
         pendingOpeningQuestion = openingQuestion
         trySendGreeting()
+    }
+
+    override fun speakFollowUp(thankYou: String, nextQuestion: String, language: String) {
+        val channel = eventsChannel ?: return
+        if (channel.state() != DataChannel.State.OPEN || thankYou.isBlank()) {
+            return
+        }
+        val content = LiveFollowUp.addressVerified(thankYou, nextQuestion, language)
+        sendLiveEvent(
+            channel,
+            "session.commentary.append",
+            "android_addr_ack_${System.currentTimeMillis()}",
+            content,
+        )
+    }
+
+    override fun setOnConnectionLost(listener: (() -> Unit)?) {
+        onConnectionLost = listener
     }
 
     override fun setMuted(muted: Boolean) {
@@ -201,11 +220,15 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
         })
     }
 
-    private class ConnectionObserver : PeerConnection.Observer {
+    private class ConnectionObserver(private val onLost: () -> Unit) : PeerConnection.Observer {
         val iceComplete = CompletableDeferred<Unit>()
 
         override fun onSignalingChange(state: PeerConnection.SignalingState?) {}
-        override fun onIceConnectionChange(state: PeerConnection.IceConnectionState?) {}
+        override fun onIceConnectionChange(state: PeerConnection.IceConnectionState?) {
+            if (state == PeerConnection.IceConnectionState.FAILED || state == PeerConnection.IceConnectionState.CLOSED) {
+                onLost()
+            }
+        }
         override fun onIceConnectionReceivingChange(receiving: Boolean) {}
         override fun onIceGatheringChange(state: PeerConnection.IceGatheringState?) {
             if (state == PeerConnection.IceGatheringState.COMPLETE) {

@@ -25,12 +25,25 @@ final class LiveFollowUpSpeechTest extends TestCase
         self::assertStringContainsString('In which room is the problem?', $text);
     }
 
-    public function testGermanCommentaryAsksForTranslation(): void
+    public function testGermanCommentaryUsesNativeTreeText(): void
     {
-        $text = LiveFollowUpSpeech::commentary('In welke ruimte bevindt het probleem zich?', 'de-DE', false);
+        $text = LiveFollowUpSpeech::commentary('In welchem Raum befindet sich das Problem?', 'de-DE', false);
         self::assertStringContainsString('Speak only German', $text);
-        self::assertStringContainsString('Translate this meaning', $text);
-        self::assertStringContainsString('Do not read it in Dutch', $text);
+        self::assertStringContainsString('Say this aloud', $text);
+        self::assertStringContainsString('In welchem Raum', $text);
+        self::assertStringContainsString('steady speaking speed', $text);
+    }
+
+    public function testAddressThankYouIsSpokenBeforeTheNextQuestion(): void
+    {
+        $text = LiveFollowUpSpeech::afterAddressVerified(
+            'Dank u. Adres vastgelegd: Voorbeeldstraat 12, 1234 AB Amsterdam. U kunt het later nog wijzigen.',
+            'In welke ruimte bevindt het probleem zich?',
+            'nl-NL',
+        );
+        self::assertStringContainsString('do not skip it', $text);
+        self::assertStringContainsString('Dank u. Adres vastgelegd', $text);
+        self::assertStringContainsString('In welke ruimte', $text);
     }
 
     public function testLanguageSwitchStaysPut(): void
@@ -38,5 +51,19 @@ final class LiveFollowUpSpeechTest extends TestCase
         $text = LiveFollowUpSpeech::switchInstructions('ja-JP');
         self::assertStringContainsString('Japanese', $text);
         self::assertStringContainsString('Do not switch back to Dutch', $text);
+    }
+
+    public function testIdlePromptAsksForInput(): void
+    {
+        $text = LiveFollowUpSpeech::idlePrompt('nl-NL');
+        self::assertStringContainsString('Bent u er nog?', $text);
+        self::assertStringContainsString('Say this exactly', $text);
+    }
+
+    public function testIdleClosingAnnouncesShutdown(): void
+    {
+        $text = LiveFollowUpSpeech::idleClosing('en-GB');
+        self::assertStringContainsString('closing the conversation', $text);
+        self::assertStringContainsString('Speak only English', $text);
     }
 }

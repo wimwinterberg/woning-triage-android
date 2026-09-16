@@ -17,6 +17,7 @@ data class Intake(
     val hypotheses: List<Hypothesis> = emptyList(),
     val risk: Risk = Risk(),
     @SerialName("next_question") val nextQuestion: NextQuestion? = null,
+    @SerialName("spoken_follow_up") val spokenFollowUp: String? = null,
     val summary: Summary? = null,
     val address: AddressState? = null,
     @SerialName("report_id") val reportId: String? = null,
@@ -29,6 +30,7 @@ data class Intake(
 @Serializable
 data class LedoField(
     val value: String? = null,
+    @SerialName("display_value") val displayValue: String? = null,
     val state: String,
     val source: String? = null,
     @SerialName("evidence_ids") val evidenceIds: List<String> = emptyList(),

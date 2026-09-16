@@ -6,8 +6,10 @@ namespace App\Command;
 
 use App\Address\WcsAddressProvider;
 use App\Entity\VoiceSession;
+use App\Live\GptLiveClient;
 use App\Live\LiveGatewayCommandQueue;
 use App\Live\LiveGreeting;
+use App\Live\LiveIdlePolicy;
 use App\Live\SidebandPayload;
 use App\Service\IntakeService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -36,10 +38,15 @@ final class LiveGatewayCommand extends Command
         private readonly LiveGatewayCommandQueue $queue,
         private readonly EntityManagerInterface $entityManager,
         private readonly IntakeService $intakeService,
+        private readonly GptLiveClient $gptLiveClient,
         #[Autowire('%env(default::OPENAI_API_KEY)%')]
         private readonly ?string $apiKey,
         #[Autowire('%env(default::OPENAI_LIVE_VOICE)%')]
         private readonly string $liveVoice = 'marin',
+        #[Autowire('%env(default::OPENAI_LIVE_IDLE_PROMPT_SECONDS)%')]
+        private readonly string $idlePromptSeconds = '60',
+        #[Autowire('%env(default::OPENAI_LIVE_IDLE_CLOSE_SECONDS)%')]
+        private readonly string $idleCloseSeconds = '180',
     ) {
         parent::__construct();
     }
@@ -70,6 +77,8 @@ final class LiveGatewayCommand extends Command
         $this->log($output, 'Address lookup provider='.WcsAddressProvider::class);
         $voice = strtolower(trim($this->liveVoice));
         $this->log($output, 'Live voice='.($voice !== '' ? $voice : 'marin'));
+        $idle = LiveIdlePolicy::fromEnv($this->idlePromptSeconds, $this->idleCloseSeconds);
+        $this->log($output, 'Live idle prompt='.$idle->promptAfterSeconds().'s close='.$idle->closeAfterSeconds().'s');
         $idleLoggedAt = 0;
         while (true) {
             $pending = $this->queue->pending();
@@ -124,13 +133,22 @@ final class LiveGatewayCommand extends Command
         } else {
             $this->requestGreeting($client, $session, $output);
         }
-        $client->setTimeout(5);
+        $client->setTimeout(1);
+        $lastSpokenFollowUp = '';
+        $lastResidentAt = microtime(true);
+        $idlePrompted = false;
+        $idlePolicy = LiveIdlePolicy::fromEnv($this->idlePromptSeconds, $this->idleCloseSeconds);
+        $lastIntakeRevision = $session->getIntake()->getRevision();
         while ($session->isOpen() || $session->getStatus() === VoiceSession::CLOSING) {
             try {
                 $message = $client->receive();
             } catch (ConnectionTimeoutException) {
                 $this->entityManager->refresh($session);
-                $this->log($output, 'Waiting on '.$session->getId().' status='.$session->getStatus().' transcript_chars='.mb_strlen($transcript));
+                $this->maybeSpeakPendingFollowUp($session, $client, $output, $lastSpokenFollowUp, $lastResidentAt, $idlePrompted);
+                $this->markActivityIfIntakeChanged($session, $lastIntakeRevision, $lastResidentAt, $idlePrompted);
+                if ($this->handleIdle($session, $client, $output, $idlePolicy, $lastResidentAt, $idlePrompted, $transcript, $audioChunks)) {
+                    break;
+                }
                 continue;
             } catch (ConnectionClosedException $exception) {
                 $this->log($output, 'Sideband closed for '.$session->getId().': '.$exception->getMessage());
@@ -146,11 +164,15 @@ final class LiveGatewayCommand extends Command
                 if ($type === 'session.output_audio.delta') {
                     ++$audioChunks;
                 }
+                if (in_array($type, ['session.input_audio.append', 'session.input_audio.delta'], true)) {
+                    $this->markResidentActivity($lastResidentAt, $idlePrompted);
+                }
                 continue;
             }
             if ($type === 'session.input_transcript.delta') {
                 $delta = (string) ($payload['delta'] ?? '');
                 $transcript .= $delta;
+                $this->markResidentActivity($lastResidentAt, $idlePrompted);
                 $this->log($output, 'input_transcript +'.mb_strlen($delta).' chars: '.$this->clip($delta));
                 continue;
             }
@@ -163,7 +185,8 @@ final class LiveGatewayCommand extends Command
                 break;
             }
             if ($type === 'session.delegation.created' && ($payload['delegation']['target'] ?? '') === 'client') {
-                $this->handleDelegation($session, $client, $output, $payload, $transcript);
+                $this->markResidentActivity($lastResidentAt, $idlePrompted);
+                $this->handleDelegation($session, $client, $output, $payload, $transcript, $lastSpokenFollowUp);
                 $transcript = '';
                 continue;
             }
@@ -184,8 +207,14 @@ final class LiveGatewayCommand extends Command
     /**
      * @param array<string, mixed> $payload
      */
-    private function handleDelegation(VoiceSession $session, WebSocketClient $client, OutputInterface $output, array $payload, string $transcript): void
-    {
+    private function handleDelegation(
+        VoiceSession $session,
+        WebSocketClient $client,
+        OutputInterface $output,
+        array $payload,
+        string $transcript,
+        string &$lastSpokenFollowUp,
+    ): void {
         $delegationId = (string) ($payload['delegation']['id'] ?? '');
         $intake = $session->getIntake();
         $this->entityManager->refresh($intake);
@@ -242,7 +271,13 @@ final class LiveGatewayCommand extends Command
         $next = $intake->document()->nextQuestion['text'] ?? 'Gegevens zijn bijgewerkt.';
         $ms = (int) round((microtime(true) - $started) * 1000);
         $sameQuestion = $previousQuestion !== '' && $previousQuestion === $next;
-        $content = \App\Live\LiveFollowUpSpeech::commentary((string) $next, $language, $sameQuestion);
+        $thankYou = $intake->document()->spokenFollowUp;
+        $content = is_string($thankYou) && $thankYou !== ''
+            ? \App\Live\LiveFollowUpSpeech::afterAddressVerified($thankYou, (string) $next, $language)
+            : \App\Live\LiveFollowUpSpeech::commentary((string) $next, $language, $sameQuestion);
+        if (is_string($thankYou) && $thankYou !== '') {
+            $lastSpokenFollowUp = $thankYou;
+        }
         $this->sendEvent($client, [
             'type' => 'session.commentary.append',
             'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
@@ -264,6 +299,111 @@ final class LiveGatewayCommand extends Command
             is_string($address['lookup_id'] ?? null) && $address['lookup_id'] !== '' ? '1' : '0',
             is_numeric($houseNumber) ? (string) strlen((string) (int) $houseNumber) : '0',
         ));
+    }
+
+    private function maybeSpeakPendingFollowUp(
+        VoiceSession $session,
+        WebSocketClient $client,
+        OutputInterface $output,
+        string &$lastSpokenFollowUp,
+        float &$lastResidentAt,
+        bool &$idlePrompted,
+    ): void {
+        $intake = $session->getIntake();
+        $this->entityManager->refresh($intake);
+        $thankYou = $intake->document()->spokenFollowUp;
+        if (!is_string($thankYou) || $thankYou === '' || $thankYou === $lastSpokenFollowUp) {
+            return;
+        }
+        $lastSpokenFollowUp = $thankYou;
+        $this->markResidentActivity($lastResidentAt, $idlePrompted);
+        $next = (string) ($intake->document()->nextQuestion['text'] ?? '');
+        $language = $intake->getConversationLanguage();
+        $this->sendEvent($client, [
+            'type' => 'session.commentary.append',
+            'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
+            'delegation_id' => null,
+            'content' => \App\Live\LiveFollowUpSpeech::afterAddressVerified($thankYou, $next, $language),
+        ]);
+        $this->log($output, 'spoken address thank-you language='.$language.' text='.$this->clip($thankYou));
+    }
+
+    private function markActivityIfIntakeChanged(
+        VoiceSession $session,
+        int &$lastIntakeRevision,
+        float &$lastResidentAt,
+        bool &$idlePrompted,
+    ): void {
+        $intake = $session->getIntake();
+        $this->entityManager->refresh($intake);
+        $revision = $intake->getRevision();
+        if ($revision !== $lastIntakeRevision) {
+            $lastIntakeRevision = $revision;
+            $this->markResidentActivity($lastResidentAt, $idlePrompted);
+        }
+    }
+
+    private function markResidentActivity(float &$lastResidentAt, bool &$idlePrompted): void
+    {
+        $lastResidentAt = microtime(true);
+        $idlePrompted = false;
+    }
+
+    /**
+     * @param-out string $transcript
+     */
+    private function handleIdle(
+        VoiceSession $session,
+        WebSocketClient $client,
+        OutputInterface $output,
+        LiveIdlePolicy $policy,
+        float $lastResidentAt,
+        bool &$idlePrompted,
+        string &$transcript,
+        int &$audioChunks,
+    ): bool {
+        $action = $policy->action(microtime(true) - $lastResidentAt, $idlePrompted);
+        if ($action === null) {
+            return false;
+        }
+        $intake = $session->getIntake();
+        $this->entityManager->refresh($intake);
+        $language = $intake->getConversationLanguage();
+        if ($action === LiveIdlePolicy::PROMPT) {
+            $idlePrompted = true;
+            $this->sendEvent($client, [
+                'type' => 'session.commentary.append',
+                'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
+                'delegation_id' => null,
+                'content' => \App\Live\LiveFollowUpSpeech::idlePrompt($language),
+            ]);
+            $this->log($output, 'idle prompt after '.$policy->promptAfterSeconds().'s language='.$language);
+
+            return false;
+        }
+
+        $this->sendEvent($client, [
+            'type' => 'session.commentary.append',
+            'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
+            'delegation_id' => null,
+            'content' => \App\Live\LiveFollowUpSpeech::idleClosing($language),
+        ]);
+        $this->log($output, 'idle close after '.$policy->closeAfterSeconds().'s language='.$language);
+        $this->drainUntilOutputOrTimeout($client, $output, $transcript, $audioChunks, 6);
+        $this->closeIdleSession($session, $output);
+
+        return true;
+    }
+
+    private function closeIdleSession(VoiceSession $session, OutputInterface $output): void
+    {
+        $providerId = $session->getProviderSessionId();
+        if (is_string($providerId) && $providerId !== '') {
+            $this->gptLiveClient->closeSession($providerId);
+        }
+        $session->close('idle_timeout', true);
+        $this->entityManager->flush();
+        $this->log($output, 'Closed '.$session->getId().' after idle timeout');
     }
 
     /**

@@ -1,6 +1,8 @@
 package nl.woningtriage.app.ui
 
 import android.Manifest
+import android.content.res.Configuration
+import android.os.LocaleList
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -46,14 +49,18 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -64,15 +71,35 @@ import nl.woningtriage.app.location.DeviceAddressLocator
 @Composable
 fun WoningtriageRoot(viewModel: AppViewModel) {
     val state by viewModel.state.collectAsState()
-    when (state.screen) {
-        Screen.Activation -> ActivationScreen(state, viewModel)
-        Screen.Start -> StartScreen(state, viewModel)
-        Screen.Conversation -> ConversationScreen(state, viewModel)
-        Screen.Address -> AddressScreen(state, viewModel)
-        Screen.Review -> ReviewScreen(state, viewModel)
-        Screen.Completed -> CompletedScreen(state, viewModel)
-        Screen.ReviewRequired -> ReviewRequiredScreen(state, viewModel)
-        Screen.FieldEdit -> FieldEditScreen(state, viewModel)
+    AppLocale(state.uiLocale) {
+        when (state.screen) {
+            Screen.Activation -> ActivationScreen(state, viewModel)
+            Screen.Start -> StartScreen(state, viewModel)
+            Screen.Conversation -> ConversationScreen(state, viewModel)
+            Screen.Address -> AddressScreen(state, viewModel)
+            Screen.Review -> ReviewScreen(state, viewModel)
+            Screen.Completed -> CompletedScreen(state, viewModel)
+            Screen.ReviewRequired -> ReviewRequiredScreen(state, viewModel)
+            Screen.FieldEdit -> FieldEditScreen(state, viewModel)
+        }
+    }
+}
+
+@Composable
+private fun AppLocale(tag: String, content: @Composable () -> Unit) {
+    val locale = remember(tag) { java.util.Locale.forLanguageTag(tag.replace('_', '-')) }
+    val context = LocalContext.current
+    val wrapped = remember(tag, context) {
+        val config = Configuration(context.resources.configuration)
+        config.setLocale(locale)
+        config.setLocales(LocaleList(locale))
+        context.createConfigurationContext(config)
+    }
+    CompositionLocalProvider(
+        LocalContext provides wrapped,
+        LocalConfiguration provides wrapped.resources.configuration,
+    ) {
+        content()
     }
 }
 
@@ -164,24 +191,20 @@ private fun ConversationScreen(state: AppUiState, viewModel: AppViewModel) {
                     colors = paperFieldColors(),
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
+                    FooterAction(
                         onClick = viewModel::toggleMute,
-                        modifier = Modifier.height(48.dp).weight(1f),
-                        colors = paperOutlineButton(),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                    ) {
-                        Icon(if (state.micMuted) Icons.Default.MicOff else Icons.Default.Mic, contentDescription = null)
-                        Text(if (state.micMuted) stringResource(R.string.unmute) else stringResource(R.string.mute), modifier = Modifier.padding(start = 8.dp))
-                    }
-                    Button(
+                        icon = if (state.micMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                        label = if (state.micMuted) stringResource(R.string.unmute) else stringResource(R.string.mute),
+                        outlined = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    FooterAction(
                         onClick = viewModel::stopConversation,
-                        modifier = Modifier.height(48.dp).weight(1f),
-                        colors = paperPrimaryButton(),
-                        shape = MaterialTheme.shapes.medium,
-                    ) {
-                        Icon(Icons.Default.Stop, contentDescription = null)
-                        Text(stringResource(R.string.stop_conversation), modifier = Modifier.padding(start = 8.dp))
-                    }
+                        icon = Icons.Default.Stop,
+                        label = stringResource(R.string.stop_conversation),
+                        outlined = false,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
         },
@@ -232,7 +255,6 @@ private fun AddressScreen(state: AppUiState, viewModel: AppViewModel) {
                         .ifBlank { null },
                     listOfNotNull(savedAddress.postcode, savedAddress.city).joinToString(" ").ifBlank { null },
                 ).joinToString(", ")
-            Text(stringResource(R.string.address_saved), style = MaterialTheme.typography.titleMedium)
             if (display.isNotBlank()) {
                 Text(display, style = MaterialTheme.typography.bodyLarge)
             }
@@ -386,6 +408,49 @@ private fun BrandMark() {
 }
 
 @Composable
+private fun FooterAction(
+    onClick: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    outlined: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val body: @Composable () -> Unit = {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+    if (outlined) {
+        OutlinedButton(
+            onClick = onClick,
+            modifier = modifier.height(56.dp),
+            colors = paperOutlineButton(),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            contentPadding = PaddingValues(0.dp),
+            shape = MaterialTheme.shapes.medium,
+        ) { body() }
+    } else {
+        Button(
+            onClick = onClick,
+            modifier = modifier.height(56.dp),
+            colors = paperPrimaryButton(),
+            contentPadding = PaddingValues(0.dp),
+            shape = MaterialTheme.shapes.medium,
+        ) { body() }
+    }
+}
+
+@Composable
 private fun PrimaryAction(
     text: String,
     onClick: () -> Unit,
@@ -534,7 +599,7 @@ private fun LedoCard(intake: Intake?, onField: (String) -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(stringResource(label), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(fieldLabel(field?.state, field?.value), style = MaterialTheme.typography.titleMedium)
+                Text(fieldLabel(field?.state, field?.displayValue ?: field?.value), style = MaterialTheme.typography.titleMedium)
             }
         }
         intake?.hypotheses.orEmpty().forEach {

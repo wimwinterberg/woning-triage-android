@@ -752,10 +752,12 @@ final class IntakeApiTest extends WebTestCase
      */
     private function assertAddressVerifiedAcknowledgement(array $intake, string $display): void
     {
-        $text = is_string($intake['next_question']['text'] ?? null) ? (string) $intake['next_question']['text'] : '';
-        self::assertStringContainsString('Dank u', $text);
-        self::assertStringContainsString('Ik heb het adres vastgelegd: '.$display, $text);
-        self::assertStringContainsString('U kunt dit later altijd nog wijzigen', $text);
+        $spoken = is_string($intake['spoken_follow_up'] ?? null) ? (string) $intake['spoken_follow_up'] : '';
+        $next = is_string($intake['next_question']['text'] ?? null) ? (string) $intake['next_question']['text'] : '';
+        self::assertStringContainsString('Dank u', $spoken);
+        self::assertStringContainsString($display, $spoken);
+        self::assertStringContainsString('later nog wijzigen', $spoken);
+        self::assertStringNotContainsString('Dank u', $next);
     }
 
     /**

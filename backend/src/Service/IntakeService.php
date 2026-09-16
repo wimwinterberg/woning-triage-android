@@ -649,6 +649,7 @@ final class IntakeService
 
     private function refreshNextQuestion(Intake $intake, \App\Domain\IntakeDocument $document): void
     {
+        $document->spokenFollowUp = null;
         $tree = $this->treeRepository->getPublished($intake->getTreeVersion());
         $next = $this->treeEngine->next($tree, $document, $intake->getConversationLanguage());
         if ($next['review_required'] || ($next['outcome'] ?? null) === 'human_review') {
@@ -679,8 +680,8 @@ final class IntakeService
     }
 
     /**
-     * Speak a short thank-you after the resident confirms an address, then continue
-     * with the tree question. Must only run on the verify turn, not on later refreshes.
+     * After verify, keep next_question as the real tree question and store a short
+     * thank-you for the live assistant to speak separately.
      */
     private function acknowledgeVerifiedAddress(\App\Domain\IntakeDocument $document, string $language): void
     {
@@ -688,14 +689,7 @@ final class IntakeService
         if (!is_array($address) || ($address['verification_status'] ?? '') !== 'verified') {
             return;
         }
-        $ack = $this->addressVerifiedAcknowledgement($address, $language);
-        $current = is_array($document->nextQuestion) ? $document->nextQuestion : [];
-        $nextText = is_string($current['text'] ?? null) ? trim((string) $current['text']) : '';
-        if ($nextText !== '' && str_contains($nextText, $ack)) {
-            return;
-        }
-        $current['text'] = $nextText !== '' ? $ack.' '.$nextText : $ack;
-        $document->nextQuestion = $current;
+        $document->spokenFollowUp = $this->addressVerifiedAcknowledgement($address, $language);
         $this->addressLookupLogger->log('follow_up', [
             'question_id' => 'address_verified_ack',
             'candidate_count' => 1,
@@ -709,16 +703,25 @@ final class IntakeService
     private function addressVerifiedAcknowledgement(array $address, string $language): string
     {
         $display = $this->formatDisplayAddress($address);
-        $nl = str_starts_with($language, 'nl');
-        if ($nl) {
-            return $display !== ''
-                ? 'Dank u. Ik heb het adres vastgelegd: '.$display.'. U kunt dit later altijd nog wijzigen.'
-                : 'Dank u. Ik heb het adres vastgelegd. U kunt dit later altijd nog wijzigen.';
-        }
+        $prefix = strtolower(substr($language, 0, 2));
 
-        return $display !== ''
-            ? 'Thank you. I have saved the address: '.$display.'. You can still change it later.'
-            : 'Thank you. I have saved the address. You can still change it later.';
+        return match ($prefix) {
+            'de' => $display !== ''
+                ? 'Danke. Adresse gespeichert: '.$display.'. Sie können sie später noch ändern.'
+                : 'Danke. Die Adresse ist gespeichert. Sie können sie später noch ändern.',
+            'tr' => $display !== ''
+                ? 'Teşekkürler. Adres kaydedildi: '.$display.'. Daha sonra değiştirebilirsiniz.'
+                : 'Teşekkürler. Adres kaydedildi. Daha sonra değiştirebilirsiniz.',
+            'ja' => $display !== ''
+                ? 'ありがとうございます。住所を保存しました: '.$display.'。後から変更できます。'
+                : 'ありがとうございます。住所を保存しました。後から変更できます。',
+            'en' => $display !== ''
+                ? 'Thank you. Saved: '.$display.'. You can still change it later.'
+                : 'Thank you. The address is saved. You can still change it later.',
+            default => $display !== ''
+                ? 'Dank u. Adres vastgelegd: '.$display.'. U kunt het later nog wijzigen.'
+                : 'Dank u. Het adres is vastgelegd. U kunt het later nog wijzigen.',
+        };
     }
 
     /**
@@ -1548,6 +1551,10 @@ final class IntakeService
 
     private function maybeAddAssistantQuestion(Intake $intake, \App\Domain\IntakeDocument $document): void
     {
+        $ack = $document->spokenFollowUp;
+        if (is_string($ack) && $ack !== '') {
+            $this->addAssistantMessage($intake, $ack);
+        }
         $text = $document->nextQuestion['text'] ?? null;
         if (is_string($text) && $text !== '') {
             $this->addAssistantMessage($intake, $text);

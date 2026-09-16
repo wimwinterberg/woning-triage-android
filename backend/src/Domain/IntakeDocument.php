@@ -33,6 +33,7 @@ final class IntakeDocument
         public array $invalidatedSummaryIds = [],
         public ?string $pendingAddressQuestionId = null,
         public ?string $pendingSummaryQuestionId = null,
+        public ?string $spokenFollowUp = null,
     ) {
     }
 
@@ -79,6 +80,9 @@ final class IntakeDocument
             invalidatedSummaryIds: array_values($data['invalidated_summary_ids'] ?? []),
             pendingAddressQuestionId: $data['pending_address_question_id'] ?? null,
             pendingSummaryQuestionId: $data['pending_summary_question_id'] ?? null,
+            spokenFollowUp: isset($data['spoken_follow_up']) && is_string($data['spoken_follow_up']) && $data['spoken_follow_up'] !== ''
+                ? $data['spoken_follow_up']
+                : null,
         );
     }
 
@@ -105,6 +109,7 @@ final class IntakeDocument
             'invalidated_summary_ids' => $this->invalidatedSummaryIds,
             'pending_address_question_id' => $this->pendingAddressQuestionId,
             'pending_summary_question_id' => $this->pendingSummaryQuestionId,
+            'spoken_follow_up' => $this->spokenFollowUp,
         ];
     }
 

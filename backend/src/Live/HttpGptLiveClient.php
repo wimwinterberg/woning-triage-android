@@ -19,6 +19,7 @@ final class HttpGptLiveClient implements GptLiveClient
         private readonly string $model = 'gpt-live-1',
         private readonly string $baseUrl = 'https://api.openai.com/v1',
         private readonly string $voice = 'marin',
+        private readonly string $speed = '1.0',
     ) {
     }
 
@@ -45,6 +46,7 @@ final class HttpGptLiveClient implements GptLiveClient
                         'audio' => [
                             'output' => [
                                 'voice' => $this->voiceName(),
+                                'speed' => $this->speedValue(),
                             ],
                         ],
                         'delegation' => ['type' => 'client'],
@@ -95,5 +97,15 @@ final class HttpGptLiveClient implements GptLiveClient
         $voice = strtolower(trim($this->voice));
 
         return $voice !== '' ? $voice : 'marin';
+    }
+
+    public function speedValue(): float
+    {
+        $speed = (float) str_replace(',', '.', trim($this->speed));
+        if ($speed < 0.8 || $speed > 1.2) {
+            return 1.0;
+        }
+
+        return round($speed, 2);
     }
 }

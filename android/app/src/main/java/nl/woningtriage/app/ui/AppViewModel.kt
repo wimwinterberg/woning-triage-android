@@ -53,6 +53,7 @@ data class AppUiState(
     val preferTyping: Boolean = false,
     val voiceSessionId: String? = null,
     val selectedCandidateId: String? = null,
+    val uiLocale: String = "nl-NL",
 )
 
 enum class Screen { Activation, Start, Conversation, Address, Review, Completed, ReviewRequired, FieldEdit }
@@ -95,6 +96,7 @@ class AppViewModel(
                     screen = Screen.Conversation,
                     transcript = listOfNotNull(intake.nextQuestion?.text?.let { TranscriptLine("assistant", it) }),
                     connectionLabel = "connecting",
+                    uiLocale = UiLocale.fromConversation(intake.conversationLanguage),
                 )
                 watchIntake(intake.id)
                 runCatching {
@@ -117,6 +119,7 @@ class AppViewModel(
             screen = Screen.Conversation,
             transcript = listOfNotNull(intake.nextQuestion?.text?.let { TranscriptLine("assistant", it) }),
             connectionLabel = "disconnected",
+            uiLocale = UiLocale.fromConversation(intake.conversationLanguage),
         )
         watchIntake(intake.id)
     }
@@ -124,7 +127,12 @@ class AppViewModel(
     fun resumeIntake() = run("resume") {
         val id = tokens.activeIntakeId ?: return@run
         val intake = api.getIntake(id)
-        _state.value = _state.value.copy(intake = intake, screen = screenFor(intake), error = null)
+        _state.value = _state.value.copy(
+            intake = intake,
+            screen = screenFor(intake),
+            error = null,
+            uiLocale = UiLocale.fromConversation(intake.conversationLanguage),
+        )
         if (intake.status == "collecting" || intake.status == "ready_for_confirmation") {
             watchIntake(intake.id)
         }
@@ -196,11 +204,27 @@ class AppViewModel(
     fun verifyCandidate(candidateId: String) = run("verify") {
         _state.value = _state.value.copy(selectedCandidateId = candidateId)
         val verified = postVerify(candidateId)
+        if (_state.value.voiceConnected) {
+            voice.speakFollowUp(
+                verified.spokenFollowUp.orEmpty(),
+                verified.nextQuestion?.text.orEmpty(),
+                verified.conversationLanguage,
+            )
+        }
+        val transcript = _state.value.transcript.toMutableList()
+        verified.spokenFollowUp?.takeIf { it.isNotBlank() && transcript.none { line -> line.text == it } }?.let {
+            transcript += TranscriptLine("assistant", it)
+        }
+        verified.nextQuestion?.text?.takeIf { it.isNotBlank() && transcript.none { line -> line.text == it } }?.let {
+            transcript += TranscriptLine("assistant", it)
+        }
         _state.value = _state.value.copy(
             intake = verified,
             selectedCandidateId = candidateId,
             screen = Screen.Address,
             error = null,
+            transcript = transcript,
+            uiLocale = UiLocale.fromConversation(verified.conversationLanguage),
         )
     }
 
@@ -320,6 +344,14 @@ class AppViewModel(
         if (session.live && answer != null && nl.woningtriage.app.voice.Sdp.canApplyAnswer(offer, answer)) {
             val opening = _state.value.intake?.nextQuestion?.text.orEmpty()
             voice.requestOpeningGreeting(opening)
+            voice.setOnConnectionLost {
+                if (_state.value.voiceConnected) {
+                    _state.value = _state.value.copy(
+                        voiceConnected = false,
+                        connectionLabel = "disconnected",
+                    )
+                }
+            }
             voice.applyRemoteAnswer(answer)
             voice.requestOpeningGreeting(opening)
             _state.value = _state.value.copy(voiceConnected = true, connectionLabel = "connected", voiceSessionId = session.id)
@@ -371,6 +403,9 @@ class AppViewModel(
         val intake = api.getIntake(id)
         val question = intake.nextQuestion?.text
         val transcript = _state.value.transcript.toMutableList()
+        intake.spokenFollowUp?.takeIf { it.isNotBlank() && transcript.none { line -> line.text == it } }?.let {
+            transcript += TranscriptLine("assistant", it)
+        }
         if (question != null && transcript.none { it.speaker == "assistant" && it.text == question }) {
             transcript += TranscriptLine("assistant", question)
         }
@@ -387,6 +422,7 @@ class AppViewModel(
             transcript = transcript,
             screen = screen,
             connectionLabel = if (_state.value.busy) "processing" else _state.value.connectionLabel,
+            uiLocale = UiLocale.fromConversation(intake.conversationLanguage),
         )
         if (screen == Screen.Completed || screen == Screen.ReviewRequired) {
             watchJob?.cancel()

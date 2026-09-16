@@ -53,6 +53,15 @@ services:
   - key: OPENAI_LIVE_VOICE
     scope: RUN_TIME
     value: marin
+  - key: OPENAI_LIVE_SPEED
+    scope: RUN_TIME
+    value: "1.0"
+  - key: OPENAI_LIVE_IDLE_PROMPT_SECONDS
+    scope: RUN_TIME
+    value: "60"
+  - key: OPENAI_LIVE_IDLE_CLOSE_SECONDS
+    scope: RUN_TIME
+    value: "180"
   - key: SYMFONY_TRUSTED_PROXIES
     scope: RUN_TIME
     value: "127.0.0.1,REMOTE_ADDR,PRIVATE_SUBNETS"
@@ -94,6 +103,15 @@ workers:
   - key: OPENAI_LIVE_VOICE
     scope: RUN_TIME
     value: marin
+  - key: OPENAI_LIVE_SPEED
+    scope: RUN_TIME
+    value: "1.0"
+  - key: OPENAI_LIVE_IDLE_PROMPT_SECONDS
+    scope: RUN_TIME
+    value: "60"
+  - key: OPENAI_LIVE_IDLE_CLOSE_SECONDS
+    scope: RUN_TIME
+    value: "180"
 jobs:
 - name: migrate
   kind: PRE_DEPLOY

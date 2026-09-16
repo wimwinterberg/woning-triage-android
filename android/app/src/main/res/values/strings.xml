@@ -23,9 +23,9 @@
     <string name="unknown">Onbekend</string>
     <string name="needs_review">Controleren</string>
     <string name="possible_cause">Mogelijke oorzaak</string>
-    <string name="mute">Microfoon dempen</string>
-    <string name="unmute">Microfoon hervatten</string>
-    <string name="stop_conversation">Gesprek stoppen</string>
+    <string name="mute">Dempen</string>
+    <string name="unmute">Hervatten</string>
+    <string name="stop_conversation">Stoppen</string>
     <string name="send">Verzenden</string>
     <string name="type_answer">Typ uw antwoord</string>
     <string name="connecting">Verbinding maken…</string>
@@ -41,7 +41,7 @@
     <string name="i_dont_know">Ik weet het niet</string>
     <string name="clear_field">Wissen</string>
     <string name="verify_address">Dit is mijn adres</string>
-    <string name="address_saved">Dank u. Ik heb dit adres vastgelegd.</string>
+    <string name="address_saved">Vastgelegd</string>
     <string name="address_can_still_change">U kunt het later altijd nog wijzigen.</string>
     <string name="postcode">Postcode</string>
     <string name="house_number">Huisnummer</string>
