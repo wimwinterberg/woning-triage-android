@@ -2,7 +2,9 @@
 <resources>
     <string name="app_name">Home intake</string>
     <string name="privacy_placeholder">Answers are processed to create a report. Conversation details are stored in the dossier. Audio recordings are not kept. The privacy notice is still to be finalised.</string>
-    <string name="start_explain">You speak or type with an AI assistant about one problem in your home. At the end you check the summary and the address.</string>
+    <string name="privacy_safe">Your report is confidential and handled with care.</string>
+    <string name="start_headline">Report a problem at home</string>
+    <string name="start_explain">Report a problem in or around your home with Woningtriage. We will help you as quickly and carefully as we can.</string>
     <string name="report_problem">Report a problem</string>
     <string name="prefer_typing">I prefer to type</string>
     <string name="resume_intake">Resume intake</string>

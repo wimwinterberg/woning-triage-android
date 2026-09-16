@@ -2,7 +2,9 @@
 <resources>
     <string name="app_name">Woningtriage</string>
     <string name="privacy_placeholder">Antwoorden worden verwerkt om een melding op te stellen. Gespreksdetails worden bewaard in het dossier. Er worden geen audio-opnamen bewaard. De privacytekst wordt nog vastgesteld.</string>
-    <string name="start_explain">U spreekt of typt met een AI-assistent over één probleem in huis. Aan het einde controleert u de samenvatting en het adres.</string>
+    <string name="privacy_safe">Uw melding is vertrouwelijk en veilig.\nWe gaan zorgzaam om met uw gegevens.</string>
+    <string name="start_headline">Probleem in huis melden</string>
+    <string name="start_explain">Meld een probleem in of rond uw woning via Woningtriage. We helpen u zo snel en goed mogelijk verder.</string>
     <string name="report_problem">Probleem melden</string>
     <string name="prefer_typing">Liever typen</string>
     <string name="resume_intake">Intake hervatten</string>
