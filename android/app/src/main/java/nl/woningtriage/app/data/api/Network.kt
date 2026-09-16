@@ -7,6 +7,8 @@ import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFact
 import kotlinx.serialization.json.Json
 import nl.woningtriage.app.BuildConfig
 import nl.woningtriage.app.domain.ApiErrorEnvelope
+import nl.woningtriage.app.ui.UiLocale
+import nl.woningtriage.app.ui.UiLocaleStore
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -17,10 +19,11 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 class TokenStore(context: Context) {
+    private val appContext = context.applicationContext
     private val prefs = EncryptedSharedPreferences.create(
-        context,
+        appContext,
         "woningtriage.secure",
-        MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
+        MasterKey.Builder(appContext).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
     )
@@ -32,10 +35,27 @@ class TokenStore(context: Context) {
         }
 
     var uiLocale: String
-        get() = prefs.getString("ui_locale", null) ?: "nl-NL"
-        set(value) {
-            prefs.edit().putString("ui_locale", value).apply()
+        get() {
+            val stored = UiLocaleStore.read(appContext)
+            val legacy = prefs.getString("ui_locale", null)
+            if (legacy != null && stored == "nl-NL" && UiLocale.fromTag(legacy) != "nl-NL") {
+                UiLocaleStore.write(appContext, legacy)
+                return UiLocale.fromTag(legacy)
+            }
+            return stored
         }
+        set(value) {
+            val normalized = UiLocale.fromTag(value)
+            UiLocaleStore.write(appContext, normalized)
+            prefs.edit().putString("ui_locale", normalized).apply()
+        }
+
+    init {
+        val legacy = prefs.getString("ui_locale", null)
+        if (legacy != null && UiLocaleStore.read(appContext) == "nl-NL" && UiLocale.fromTag(legacy) != "nl-NL") {
+            UiLocaleStore.write(appContext, legacy)
+        }
+    }
 
     var activeIntakeId: String?
         get() = prefs.getString("active_intake_id", null)

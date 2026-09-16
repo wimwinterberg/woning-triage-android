@@ -1,9 +1,6 @@
 package nl.woningtriage.app.ui
 
 import android.Manifest
-import android.content.res.Configuration
-import android.os.LocaleList
-import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -53,13 +50,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -104,38 +99,8 @@ fun WoningtriageRoot(viewModel: AppViewModel) {
 
 @Composable
 private fun AppLocale(tag: String, content: @Composable () -> Unit) {
-    val locale = remember(tag) { java.util.Locale.forLanguageTag(tag.replace('_', '-')) }
-    val context = LocalContext.current
-    val wrapped = remember(tag, context) {
-        val config = Configuration(context.resources.configuration)
-        config.setLocale(locale)
-        config.setLocales(LocaleList(locale))
-        context.createConfigurationContext(config)
-    }
-    SideEffect {
-        java.util.Locale.setDefault(locale)
-    }
-    // createConfigurationContext() is not the Activity. rememberLauncherForActivityResult
-    // looks up LocalActivityResultRegistryOwner from LocalContext, so keep the Activity owner.
-    // Compose 1.7 stringResource() reads LocalConfiguration then LocalContext.resources.
     val layoutDirection = if (UiLocale.isRtl(tag)) LayoutDirection.Rtl else LayoutDirection.Ltr
-    val registryOwner = LocalActivityResultRegistryOwner.current
-    if (registryOwner != null) {
-        CompositionLocalProvider(
-            LocalContext provides wrapped,
-            LocalConfiguration provides wrapped.resources.configuration,
-            LocalLayoutDirection provides layoutDirection,
-            LocalActivityResultRegistryOwner provides registryOwner,
-            content = content,
-        )
-    } else {
-        CompositionLocalProvider(
-            LocalContext provides wrapped,
-            LocalConfiguration provides wrapped.resources.configuration,
-            LocalLayoutDirection provides layoutDirection,
-            content = content,
-        )
-    }
+    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection, content = content)
 }
 
 @Composable

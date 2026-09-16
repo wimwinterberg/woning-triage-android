@@ -76,6 +76,7 @@ class AppViewModel(
     val state: StateFlow<AppUiState> = _state
     private var confirmKey: String? = null
     private var watchJob: Job? = null
+    var recreateForLocale: ((String) -> Unit)? = null
 
     init {
         if (tokens.accessToken == null) {
@@ -378,20 +379,23 @@ class AppViewModel(
         val normalized = UiLocale.fromTag(tag)
         tokens.uiLocale = normalized
         _state.value = _state.value.copy(uiLocale = normalized, showLanguagePicker = false)
-        val intake = _state.value.intake
-        if (intake == null || _state.value.screen == Screen.Start) {
-            return@run
+        try {
+            val intake = _state.value.intake
+            if (intake != null && _state.value.screen != Screen.Start) {
+                val updated = api.changeLanguage(
+                    intake.id,
+                    UUID.randomUUID().toString(),
+                    nl.woningtriage.app.data.api.LanguagePatchRequest(
+                        expectedRevision = intake.revision,
+                        mode = "manual",
+                        language = normalized,
+                    ),
+                )
+                applyLanguageIntake(updated)
+            }
+        } finally {
+            recreateForLocale?.invoke(normalized)
         }
-        val updated = api.changeLanguage(
-            intake.id,
-            UUID.randomUUID().toString(),
-            nl.woningtriage.app.data.api.LanguagePatchRequest(
-                expectedRevision = intake.revision,
-                mode = "manual",
-                language = normalized,
-            ),
-        )
-        applyLanguageIntake(updated)
     }
 
     fun acceptUiOffer() = answerUiOffer(true)
@@ -413,6 +417,9 @@ class AppViewModel(
             tokens.uiLocale = ui
         }
         applyLanguageIntake(updated)
+        if (accept) {
+            recreateForLocale?.invoke(_state.value.uiLocale)
+        }
     }
 
     private fun applyLanguageIntake(intake: Intake) {

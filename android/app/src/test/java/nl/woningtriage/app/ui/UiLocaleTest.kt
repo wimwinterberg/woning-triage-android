@@ -16,4 +16,12 @@ class UiLocaleTest {
         assertEquals("fr-FR", UiLocale.fromConversation("fr"))
         assertEquals("en-GB", UiLocale.fromConversation("it-IT"))
     }
+
+    @Test
+    fun pickerTagsStayStable() {
+        listOf("nl-NL", "en-GB", "de-DE", "fr-FR", "es-ES", "tr-TR", "ar", "pl-PL", "pap", "zgh", "ja-JP")
+            .forEach { tag ->
+                assertEquals(tag, UiLocale.fromTag(tag))
+            }
+    }
 }
