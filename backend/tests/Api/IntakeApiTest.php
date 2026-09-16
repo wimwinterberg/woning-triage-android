@@ -88,6 +88,7 @@ final class IntakeApiTest extends WebTestCase
             'evidence_message_id' => null,
         ], 'addr-v1');
         self::assertSame('verified', $intake['address']['verification_status']);
+        $this->assertAddressVerifiedAcknowledgement($intake, 'Voorbeeldstraat 12 A, 1234 AB Amsterdam');
 
         $summaryTask = $this->postJson('/api/v1/intakes/'.$intake['id'].'/summaries', $this->tokenA, [
             'expected_revision' => $intake['revision'],
@@ -289,6 +290,7 @@ final class IntakeApiTest extends WebTestCase
         self::assertSame('verified', $verified['address']['verification_status']);
         self::assertSame('Overkant', $verified['address']['street']);
         self::assertSame(14, $verified['address']['house_number']);
+        $this->assertAddressVerifiedAcknowledgement($verified, 'Overkant 14, 1234 AB Amsterdam');
     }
 
     public function testGpsVerifyAcceptsOmittedChannelAndZeroAddressRevision(): void
@@ -313,6 +315,7 @@ final class IntakeApiTest extends WebTestCase
         self::assertSame('verified', $verified['address']['verification_status']);
         self::assertSame('Voorbeeldstraat', $verified['address']['street']);
         self::assertSame(12, $verified['address']['house_number']);
+        $this->assertAddressVerifiedAcknowledgement($verified, 'Voorbeeldstraat 12, 1234 AB Amsterdam');
     }
 
     public function testGpsLookupRejectsForeignCoordinatesAndEmptyHintsStayUnverified(): void
@@ -638,6 +641,7 @@ final class IntakeApiTest extends WebTestCase
         self::assertNotNull($intake['summary']);
         self::assertNull($intake['report_id']);
         self::assertSame($intake['summary']['id'], $intake['next_question']['id']);
+        $this->assertAddressVerifiedAcknowledgement($intake, 'Voorbeeldstraat 12, 1234 AB Amsterdam');
         self::assertStringContainsString('Klopt dit?', $intake['next_question']['text']);
         self::assertStringContainsString('Keuken', $intake['next_question']['text']);
 
@@ -681,6 +685,7 @@ final class IntakeApiTest extends WebTestCase
         self::assertSame('verified', $intake['address']['verification_status']);
         self::assertNotNull($intake['summary']);
         self::assertNull($intake['report_id']);
+        $this->assertAddressVerifiedAcknowledgement($intake, 'Voorbeeldstraat 12, 1234 AB Amsterdam');
         self::assertStringContainsString('Klopt dit?', $intake['next_question']['text']);
         self::assertStringContainsString('Badkamer', $intake['next_question']['text']);
 
@@ -740,6 +745,17 @@ final class IntakeApiTest extends WebTestCase
         self::assertSame('confirmed', $intake['status']);
         self::assertNotNull($intake['report_id']);
         self::assertSame('De melding is vastgelegd.', $intake['next_question']['text']);
+    }
+
+    /**
+     * @param array<string, mixed> $intake
+     */
+    private function assertAddressVerifiedAcknowledgement(array $intake, string $display): void
+    {
+        $text = is_string($intake['next_question']['text'] ?? null) ? (string) $intake['next_question']['text'] : '';
+        self::assertStringContainsString('Dank u', $text);
+        self::assertStringContainsString('Ik heb het adres vastgelegd: '.$display, $text);
+        self::assertStringContainsString('U kunt dit later altijd nog wijzigen', $text);
     }
 
     /**

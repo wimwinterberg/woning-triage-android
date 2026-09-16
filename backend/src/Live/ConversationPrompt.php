@@ -8,7 +8,7 @@ final class ConversationPrompt
 {
     public static function version(): string
     {
-        return 'conversation-v8';
+        return 'conversation-v9';
     }
 
     public static function text(bool $restore, string $language): string
@@ -38,6 +38,7 @@ Delegeer postcode, huisnummer en adresopzoek naar de backend. Zoek zelf geen adr
 Heb je alleen de postcode, vraag dan alleen het huisnummer. Heb je alleen het huisnummer, vraag dan de postcode.
 Als de bewoner het adres afwijst, een andere postcode geeft of opnieuw wil beginnen, herhaal het oude adres niet. Zeg de nieuwe backendvraag.
 "Klopt", "ja" en "oké" zijn bevestigingen. Delegeer die meteen; vraag niet opnieuw hetzelfde adres.
+Als de backend het adres heeft vastgelegd, bedank kort, herhaal precies dat adres en zeg dat de bewoner het later nog kan wijzigen. Stel daarna de backendvraag. Verzin geen ander adres.
 Als de backend een samenvatting stuurt, lees die tekst voor en vraag of het klopt. Zeg niet dat de melding is opgeslagen tot de backend "De melding is vastgelegd" stuurt.
 Geef geen riskante reparatie-instructies. Zeg niet dat er een monteur is gestuurd.
 Delegeer naar de backend bij feiten, adresopzoek, bevestiging of dossierwijzigingen.

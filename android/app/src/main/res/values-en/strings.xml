@@ -41,7 +41,8 @@
     <string name="i_dont_know">I don\'t know</string>
     <string name="clear_field">Clear</string>
     <string name="verify_address">This is my address</string>
-    <string name="address_saved">Address saved</string>
+    <string name="address_saved">Thank you. I have saved this address.</string>
+    <string name="address_can_still_change">You can still change it later.</string>
     <string name="postcode">Postcode</string>
     <string name="house_number">House number</string>
     <string name="addition">Addition</string>

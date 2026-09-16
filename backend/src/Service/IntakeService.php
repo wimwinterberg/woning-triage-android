@@ -152,7 +152,9 @@ final class IntakeService
                 return;
             }
 
+            $wasAddressVerified = $document->isAddressVerified();
             $this->maybeConfirmPendingAddress($document, $text, $messageId, $spokenYes);
+            $justVerifiedAddress = !$wasAddressVerified && $document->isAddressVerified();
             $document->applyProposalUpdates($proposal->fieldUpdates);
             foreach ($proposal->hypotheses as $hypothesis) {
                 $document->hypotheses[] = array_merge(['id' => IdGenerator::prefixed('hyp')], $hypothesis);
@@ -197,6 +199,10 @@ final class IntakeService
                 $this->confirmSpokenReport($intake, $document, $task, $messageId);
 
                 return;
+            }
+            if ($justVerifiedAddress) {
+                $this->acknowledgeVerifiedAddress($document, $intake->getConversationLanguage());
+                $intake->replaceDocument($document);
             }
             $task->succeed($intake->getRevision());
             $this->maybeAddAssistantQuestion($intake, $document);
@@ -430,6 +436,7 @@ final class IntakeService
         }
         $document->pendingAddressQuestionId = null;
         $this->refreshNextQuestion($intake, $document);
+        $this->acknowledgeVerifiedAddress($document, $intake->getConversationLanguage());
         $intake->replaceDocument($document);
         $intake->bumpRevision();
         $this->events->publish($intake, 'intake.updated');
@@ -669,6 +676,91 @@ final class IntakeService
             'text' => $next['text'],
         ];
         $this->prepareAddressFollowUp($document, $intake->getConversationLanguage());
+    }
+
+    /**
+     * Speak a short thank-you after the resident confirms an address, then continue
+     * with the tree question. Must only run on the verify turn, not on later refreshes.
+     */
+    private function acknowledgeVerifiedAddress(\App\Domain\IntakeDocument $document, string $language): void
+    {
+        $address = $document->address;
+        if (!is_array($address) || ($address['verification_status'] ?? '') !== 'verified') {
+            return;
+        }
+        $ack = $this->addressVerifiedAcknowledgement($address, $language);
+        $current = is_array($document->nextQuestion) ? $document->nextQuestion : [];
+        $nextText = is_string($current['text'] ?? null) ? trim((string) $current['text']) : '';
+        if ($nextText !== '' && str_contains($nextText, $ack)) {
+            return;
+        }
+        $current['text'] = $nextText !== '' ? $ack.' '.$nextText : $ack;
+        $document->nextQuestion = $current;
+        $this->addressLookupLogger->log('follow_up', [
+            'question_id' => 'address_verified_ack',
+            'candidate_count' => 1,
+            'source' => ($address['source'] ?? '') === 'gps' ? 'gps' : 'postcode',
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $address
+     */
+    private function addressVerifiedAcknowledgement(array $address, string $language): string
+    {
+        $display = $this->formatDisplayAddress($address);
+        $nl = str_starts_with($language, 'nl');
+        if ($nl) {
+            return $display !== ''
+                ? 'Dank u. Ik heb het adres vastgelegd: '.$display.'. U kunt dit later altijd nog wijzigen.'
+                : 'Dank u. Ik heb het adres vastgelegd. U kunt dit later altijd nog wijzigen.';
+        }
+
+        return $display !== ''
+            ? 'Thank you. I have saved the address: '.$display.'. You can still change it later.'
+            : 'Thank you. I have saved the address. You can still change it later.';
+    }
+
+    /**
+     * @param array<string, mixed> $address
+     */
+    private function formatDisplayAddress(array $address): string
+    {
+        $fromCandidate = $this->displayAddressFromVerifiedCandidate($address);
+        if ($fromCandidate !== '') {
+            return $fromCandidate;
+        }
+        $street = is_string($address['street'] ?? null) ? trim((string) $address['street']) : '';
+        $number = $address['house_number'] ?? null;
+        $numberText = is_int($number) || is_numeric($number) ? (string) (int) $number : '';
+        $addition = is_string($address['addition'] ?? null) ? trim((string) $address['addition']) : '';
+        $postcode = is_string($address['postcode'] ?? null) ? trim((string) $address['postcode']) : '';
+        $city = is_string($address['city'] ?? null) ? trim((string) $address['city']) : '';
+        $line = trim($street.' '.$numberText.($addition !== '' ? ' '.$addition : ''));
+        $place = trim($postcode.' '.$city);
+
+        return trim($line.($place !== '' ? ', '.$place : ''), " ,");
+    }
+
+    /**
+     * @param array<string, mixed> $address
+     */
+    private function displayAddressFromVerifiedCandidate(array $address): string
+    {
+        $candidateId = is_string($address['candidate_id'] ?? null) ? (string) $address['candidate_id'] : '';
+        if ($candidateId === '') {
+            return '';
+        }
+        foreach ($this->candidateList($address['candidates'] ?? []) as $candidate) {
+            if (($candidate['candidate_id'] ?? null) === $candidateId) {
+                $display = is_string($candidate['display_address'] ?? null) ? trim((string) $candidate['display_address']) : '';
+                if ($display !== '') {
+                    return $display;
+                }
+            }
+        }
+
+        return '';
     }
 
     private function prepareAddressFollowUp(\App\Domain\IntakeDocument $document, string $language): void

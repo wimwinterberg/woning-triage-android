@@ -223,8 +223,20 @@ private fun AddressScreen(state: AppUiState, viewModel: AppViewModel) {
         OutlinedTextField(state.addition, viewModel::onAddition, label = { Text(stringResource(R.string.addition)) }, modifier = Modifier.fillMaxWidth(), colors = paperFieldColors())
         PrimaryAction(text = stringResource(R.string.lookup_address), onClick = viewModel::lookupAddress, enabled = !state.busy)
         AddressCandidatesCard(state.intake, state.selectedCandidateId, onVerify = viewModel::verifyCandidate)
-        if (state.intake?.address?.verificationStatus == "verified") {
+        val savedAddress = state.intake?.address
+        if (savedAddress?.verificationStatus == "verified") {
+            val display = savedAddress.candidates.firstOrNull { it.candidateId == savedAddress.candidateId }?.displayAddress
+                ?: listOfNotNull(
+                    listOfNotNull(savedAddress.street, savedAddress.houseNumber?.toString(), savedAddress.addition)
+                        .joinToString(" ")
+                        .ifBlank { null },
+                    listOfNotNull(savedAddress.postcode, savedAddress.city).joinToString(" ").ifBlank { null },
+                ).joinToString(", ")
             Text(stringResource(R.string.address_saved), style = MaterialTheme.typography.titleMedium)
+            if (display.isNotBlank()) {
+                Text(display, style = MaterialTheme.typography.bodyLarge)
+            }
+            Text(stringResource(R.string.address_can_still_change), style = MaterialTheme.typography.bodyMedium)
         }
         TextButton(onClick = viewModel::goConversation, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
             Text(stringResource(R.string.adjust))

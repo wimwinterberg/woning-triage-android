@@ -171,7 +171,7 @@
 <div class="layout">
 <nav>
   <h1>Woningtriage</h1>
-  <p>Werking v1 · branch do-app-platform · prompt conversation-v8</p>
+  <p>Werking v1 · branch develop · prompt conversation-v9</p>
   <a href="#overzicht">1. Overzicht</a>
   <a href="#wie-doet-wat">2. Wie doet wat</a>
   <a href="#architectuur">3. Architectuur</a>
@@ -310,7 +310,7 @@ sequenceDiagram
   App->>API: POST /api/v1/intakes input_mode=voice
   App->>App: watchIntake elke 700ms
   App->>API: POST /intakes/{id}/voice-sessions sdp_offer
-  API->>OA: POST /v1/live/sessions<br/>instructions=conversation-v8<br/>delegation.type=client<br/>transport=webrtc
+  API->>OA: POST /v1/live/sessions<br/>instructions=conversation-v9<br/>delegation.type=client<br/>transport=webrtc
   OA-->>API: session id + sdp_answer
   API->>API: VoiceSession in Postgres, enqueue worker
   API-->>App: live=true + sdp_answer
@@ -396,7 +396,7 @@ OpenAI-Beta: live=v1
 {
   "session": {
     "model": "gpt-live-1",
-    "instructions": "&lt;conversation-v8&gt;",
+    "instructions": "&lt;conversation-v9&gt;",
     "delegation": { "type": "client" }
   },
   "transport": { "type": "webrtc", "sdp": "&lt;offer van de telefoon&gt;" }
@@ -427,13 +427,14 @@ OpenAI-Beta: live=v1
     <li><span class="chip">niet</span> Het model krijgt geen tool-resultaat als JSON terug. Het krijgt een <em>zin</em> in commentary: de volgende vraag die het hardop moet zeggen.</li>
     <li><span class="chip">niet</span> WCS wordt nooit door GPT-Live gebeld. Alleen de PHP-backend belt WCS.</li>
   </ul>
-  <h3>Prompt (conversation-v8), kernregels</h3>
+  <h3>Prompt (conversation-v9), kernregels</h3>
   <ul>
     <li>Altijd huurwoning; nooit huur/koop vragen.</li>
     <li>Groet in het Nederlands; daarna de taal van de bewoner (EN/DE/TR/JA). Niet terug naar Nederlands.</li>
     <li>Eén korte vervolgvraag. Geen kamers, onderdelen of oorzaken verzinnen.</li>
     <li>Postcode = 4 cijfers + 2 letters; cijfers als woorden in NL/EN/DE/TR/JA; letters via NATO of Simon Johan.</li>
     <li>Adreslookup delegeren. “Klopt”, “ja”, “oké” zijn bevestigingen — meteen delegeren.</li>
+    <li>Na adresbevestiging: bedanken, het adres kort herhalen, zeggen dat het later nog gewijzigd kan worden, daarna de backendvraag.</li>
     <li>Samenvatting van de backend voorlezen. Niet zeggen dat het is opgeslagen tot <code>De melding is vastgelegd.</code></li>
     <li>Geen reparatie-advies, geen “monteur gestuurd”, geen planningstijd.</li>
   </ul>
@@ -503,7 +504,8 @@ flowchart TD
   FAIL["lookup onbeschikbaar → zeg het nog eens"]
   YES{"Klopt / ja / oké"}
   VER["verifyAddress op het dossier"]
-  SUM["samenvatting aanbieden"]
+  ACK["Dank u. Adres vastgelegd: … U kunt later nog wijzigen."]
+  SUM["samenvatting of volgende LEDO-vraag"]
 
   T --> P --> L
   L -->|nee, alleen postcode| HN["vraag alleen huisnummer"]
@@ -513,7 +515,7 @@ flowchart TD
   WCS -->|200, meerdere| N2
   WCS -->|404| N0
   WCS -->|401/429/503| FAIL
-  N1 --> YES -->|ja| VER --> SUM
+  N1 --> YES -->|ja| VER --> ACK --> SUM
   YES -->|nee / verkeerde postcode| P
     </pre>
   </div>
@@ -619,6 +621,7 @@ flowchart TD
       <tr><td><code>Address lookup finished … item_count=1</code></td><td>WCS 200, één adres</td></tr>
       <tr><td><code>looked_up=0</code></td><td>Geen lookup: parser of huisnummer mist</td></tr>
       <tr><td><code>question_id=address_confirm_…</code></td><td>Wacht op Klopt/ja</td></tr>
+      <tr><td><code>question_id=address_verified_ack</code></td><td>Bedankt, adres herhaald, later nog te wijzigen</td></tr>
       <tr><td><code>question_id=terminal_summary</code></td><td>Plaatshouder, nog geen echte samenvatting</td></tr>
       <tr><td><code>next_question id = summary_… / Klopt dit?</code></td><td>Echte samenvatting</td></tr>
       <tr><td><code>intake_confirmed</code> / De melding is vastgelegd</td><td>Report bestaat</td></tr>
