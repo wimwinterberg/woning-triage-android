@@ -3,44 +3,54 @@ package nl.woningtriage.app.ui
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -63,15 +73,25 @@ fun WoningtriageRoot(viewModel: AppViewModel) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ActivationScreen(state: AppUiState, viewModel: AppViewModel) {
-    ScreenScaffold(stringResource(R.string.activation_title), state.error) {
-        Text(stringResource(R.string.activation_explain))
-        OutlinedTextField(state.activationCode, viewModel::onCode, label = { Text(stringResource(R.string.activation_code)) }, modifier = Modifier.fillMaxWidth())
-        Button(onClick = viewModel::activate, enabled = !state.busy && state.activationCode.isNotBlank(), modifier = Modifier.fillMaxWidth().height(48.dp)) {
-            Text(stringResource(R.string.activate))
-        }
+    PaperScaffold {
+        BrandMark()
+        Text(stringResource(R.string.activation_title), style = MaterialTheme.typography.headlineLarge)
+        Text(stringResource(R.string.activation_explain), style = MaterialTheme.typography.bodyLarge)
+        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        OutlinedTextField(
+            state.activationCode,
+            viewModel::onCode,
+            label = { Text(stringResource(R.string.activation_code)) },
+            modifier = Modifier.fillMaxWidth(),
+            colors = paperFieldColors(),
+        )
+        PrimaryAction(
+            text = stringResource(R.string.activate),
+            onClick = viewModel::activate,
+            enabled = !state.busy && state.activationCode.isNotBlank(),
+        )
     }
 }
 
@@ -81,19 +101,38 @@ private fun StartScreen(state: AppUiState, viewModel: AppViewModel) {
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) viewModel.startIntake(true) else viewModel.startIntake(false)
     }
-    ScreenScaffold(stringResource(R.string.app_name), state.error) {
+    PaperScaffold(footer = { PrivacyFooter() }) {
+        BrandMark()
+        Text(stringResource(R.string.start_headline), style = MaterialTheme.typography.displaySmall)
+        Icon(
+            painter = painterResource(R.drawable.ic_house_outline),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(120.dp).padding(top = 12.dp, bottom = 4.dp),
+        )
         Text(stringResource(R.string.start_explain), style = MaterialTheme.typography.bodyLarge)
-        Text(stringResource(R.string.privacy_placeholder), style = MaterialTheme.typography.bodySmall)
-        Button(
+        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        Spacer(Modifier.height(8.dp))
+        PrimaryAction(
+            text = stringResource(R.string.report_problem),
             onClick = { launcher.launch(Manifest.permission.RECORD_AUDIO) },
             enabled = !state.busy,
-            modifier = Modifier.fillMaxWidth().height(48.dp).semantics { contentDescription = context.getString(R.string.report_problem) },
-        ) { Text(stringResource(R.string.report_problem)) }
-        OutlinedButton(onClick = { viewModel.startIntake(false) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth().height(48.dp)) {
-            Text(stringResource(R.string.prefer_typing))
+            contentDescription = context.getString(R.string.report_problem),
+        )
+        Row(
+            Modifier
+                .clickable(enabled = !state.busy) { viewModel.startIntake(false) }
+                .padding(vertical = 8.dp)
+                .semantics { contentDescription = context.getString(R.string.prefer_typing) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(stringResource(R.string.prefer_typing), style = MaterialTheme.typography.titleMedium)
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
         }
         if (state.intake != null || !state.hasToken) {
-            TextButton(onClick = viewModel::resumeIntake) { Text(stringResource(R.string.resume_intake)) }
+            TextButton(onClick = viewModel::resumeIntake, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
+                Text(stringResource(R.string.resume_intake))
+            }
         }
     }
 }
@@ -101,163 +140,293 @@ private fun StartScreen(state: AppUiState, viewModel: AppViewModel) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ConversationScreen(state: AppUiState, viewModel: AppViewModel) {
-    val tablet = LocalConfiguration.current.screenWidthDp >= 600
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = { BrandTopBar() },
         bottomBar = {
-            Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding().padding(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = state.draft,
-                        onValueChange = viewModel::onDraft,
-                        modifier = Modifier.weight(1f),
-                        label = { Text(stringResource(R.string.type_answer)) },
-                    )
-                    IconButton(onClick = viewModel::sendDraft, modifier = Modifier.semantics { contentDescription = "send" }) {
-                        Icon(Icons.Default.Send, contentDescription = stringResource(R.string.send))
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilledTonalButton(onClick = viewModel::toggleMute, modifier = Modifier.height(48.dp)) {
+            Column(
+                Modifier.fillMaxWidth().imePadding().navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                OutlinedTextField(
+                    value = state.draft,
+                    onValueChange = viewModel::onDraft,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(stringResource(R.string.type_answer)) },
+                    trailingIcon = {
+                        IconButton(onClick = viewModel::sendDraft, modifier = Modifier.semantics { contentDescription = "send" }) {
+                            Icon(Icons.Default.Send, contentDescription = stringResource(R.string.send))
+                        }
+                    },
+                    colors = paperFieldColors(),
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = viewModel::toggleMute,
+                        modifier = Modifier.height(48.dp).weight(1f),
+                        colors = paperOutlineButton(),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    ) {
                         Icon(if (state.micMuted) Icons.Default.MicOff else Icons.Default.Mic, contentDescription = null)
-                        Text(if (state.micMuted) stringResource(R.string.unmute) else stringResource(R.string.mute))
+                        Text(if (state.micMuted) stringResource(R.string.unmute) else stringResource(R.string.mute), modifier = Modifier.padding(start = 8.dp))
                     }
-                    Button(onClick = viewModel::stopConversation, modifier = Modifier.height(48.dp)) {
+                    Button(
+                        onClick = viewModel::stopConversation,
+                        modifier = Modifier.height(48.dp).weight(1f),
+                        colors = paperPrimaryButton(),
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
                         Icon(Icons.Default.Stop, contentDescription = null)
-                        Text(stringResource(R.string.stop_conversation))
+                        Text(stringResource(R.string.stop_conversation), modifier = Modifier.padding(start = 8.dp))
                     }
                 }
             }
         },
     ) { padding ->
-        val content: @Composable () -> Unit = {
-            Text(statusLabel(state), style = MaterialTheme.typography.labelLarge)
-            state.intake?.nextQuestion?.text?.let { Text(it, style = MaterialTheme.typography.titleMedium) }
+        Column(
+            Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+                .widthIn(max = 720.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            StatusChip(statusLabel(state))
+            state.intake?.nextQuestion?.text?.let { Text(it, style = MaterialTheme.typography.headlineSmall) }
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Transcript(state.transcript)
             LedoCard(state.intake, onField = viewModel::openField)
             AddressCandidatesCard(state.intake, onVerify = viewModel::verifyCandidate)
-            OutlinedButton(onClick = viewModel::goAddress) { Text(stringResource(R.string.lookup_address)) }
-        }
-        if (tablet) {
-            Row(Modifier.padding(padding).fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp), content = { content() })
+            TextButton(onClick = viewModel::goAddress, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary)) {
+                Text(stringResource(R.string.lookup_address))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
             }
-        } else {
-            Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
         }
     }
 }
 
 @Composable
 private fun AddressScreen(state: AppUiState, viewModel: AppViewModel) {
-    ScreenScaffold(stringResource(R.string.lookup_address), state.error) {
-        OutlinedTextField(state.postcode, viewModel::onPostcode, label = { Text(stringResource(R.string.postcode)) }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(state.houseNumber, viewModel::onHouseNumber, label = { Text(stringResource(R.string.house_number)) }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(state.addition, viewModel::onAddition, label = { Text(stringResource(R.string.addition)) }, modifier = Modifier.fillMaxWidth())
-        Button(onClick = viewModel::lookupAddress, enabled = !state.busy, modifier = Modifier.fillMaxWidth().height(48.dp)) {
-            Text(stringResource(R.string.lookup_address))
-        }
-        state.intake?.address?.candidates.orEmpty().forEach { candidate ->
-            Card(Modifier.fillMaxWidth().clickable { viewModel.verifyCandidate(candidate.candidateId) }) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(candidate.displayAddress, style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(R.string.verify_address), style = MaterialTheme.typography.labelLarge)
-                }
-            }
-        }
+    PaperScaffold {
+        BrandMark()
+        Text(stringResource(R.string.lookup_address), style = MaterialTheme.typography.headlineLarge)
+        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        OutlinedTextField(state.postcode, viewModel::onPostcode, label = { Text(stringResource(R.string.postcode)) }, modifier = Modifier.fillMaxWidth(), colors = paperFieldColors())
+        OutlinedTextField(state.houseNumber, viewModel::onHouseNumber, label = { Text(stringResource(R.string.house_number)) }, modifier = Modifier.fillMaxWidth(), colors = paperFieldColors())
+        OutlinedTextField(state.addition, viewModel::onAddition, label = { Text(stringResource(R.string.addition)) }, modifier = Modifier.fillMaxWidth(), colors = paperFieldColors())
+        PrimaryAction(text = stringResource(R.string.lookup_address), onClick = viewModel::lookupAddress, enabled = !state.busy)
+        AddressCandidatesCard(state.intake, onVerify = viewModel::verifyCandidate)
         if (state.intake?.address?.verificationStatus == "verified") {
-            Button(onClick = viewModel::requestSummary, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text(stringResource(R.string.confirm)) }
+            PrimaryAction(text = stringResource(R.string.confirm), onClick = viewModel::requestSummary)
         }
-        TextButton(onClick = viewModel::goConversation) { Text(stringResource(R.string.adjust)) }
+        TextButton(onClick = viewModel::goConversation, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
+            Text(stringResource(R.string.adjust))
+        }
     }
 }
 
 @Composable
 private fun ReviewScreen(state: AppUiState, viewModel: AppViewModel) {
     val intake = state.intake
-    ScreenScaffold(stringResource(R.string.confirm), state.error) {
+    PaperScaffold {
+        BrandMark()
+        Text(stringResource(R.string.confirm), style = MaterialTheme.typography.headlineLarge)
+        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Text(intake?.summary?.residentText.orEmpty(), style = MaterialTheme.typography.bodyLarge)
         LedoCard(intake, onField = viewModel::openField)
         if (intake?.conversationLanguage?.startsWith("nl") != true) {
             Text(stringResource(R.string.work_description), style = MaterialTheme.typography.titleMedium)
             Text(intake?.summary?.workDescriptionNl.orEmpty())
         }
-        intake?.address?.let { Text(listOfNotNull(it.street, it.houseNumber?.toString(), it.addition, it.postcode, it.city).joinToString(" ")) }
-        Button(onClick = viewModel::confirm, enabled = !state.busy, modifier = Modifier.fillMaxWidth().height(48.dp).semantics { contentDescription = "confirm" }) {
-            Text(stringResource(R.string.confirm))
+        intake?.address?.let { Text(listOfNotNull(it.street, it.houseNumber?.toString(), it.addition, it.postcode, it.city).joinToString(" "), style = MaterialTheme.typography.bodyLarge) }
+        PrimaryAction(text = stringResource(R.string.confirm), onClick = viewModel::confirm, enabled = !state.busy, contentDescription = "confirm")
+        TextButton(onClick = viewModel::goConversation, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
+            Text(stringResource(R.string.adjust))
         }
-        OutlinedButton(onClick = viewModel::goConversation, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text(stringResource(R.string.adjust)) }
     }
 }
 
 @Composable
 private fun CompletedScreen(state: AppUiState, viewModel: AppViewModel) {
-    ScreenScaffold(stringResource(R.string.saved), state.error) {
-        Text(state.intake?.reportId.orEmpty(), style = MaterialTheme.typography.headlineSmall)
-        Text(state.intake?.summary?.workDescriptionNl.orEmpty())
+    PaperScaffold {
+        BrandMark()
+        Text(stringResource(R.string.saved), style = MaterialTheme.typography.headlineLarge)
+        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        Text(state.intake?.reportId.orEmpty(), style = MaterialTheme.typography.titleMedium)
+        Text(state.intake?.summary?.workDescriptionNl.orEmpty(), style = MaterialTheme.typography.bodyLarge)
         state.intake?.address?.let { Text(listOfNotNull(it.street, it.houseNumber?.toString(), it.addition, it.postcode, it.city).joinToString(" ")) }
-        Button(onClick = viewModel::goStart, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text(stringResource(R.string.new_report)) }
+        PrimaryAction(text = stringResource(R.string.new_report), onClick = viewModel::goStart)
     }
 }
 
 @Composable
 private fun ReviewRequiredScreen(state: AppUiState, viewModel: AppViewModel) {
-    ScreenScaffold(stringResource(R.string.app_name), state.error) {
-        Text(state.intake?.nextQuestion?.text.orEmpty())
-        Text(stringResource(R.string.demo_no_staff))
-        Button(onClick = viewModel::goStart, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text(stringResource(R.string.new_intake)) }
+    PaperScaffold {
+        BrandMark()
+        Text(state.intake?.nextQuestion?.text.orEmpty(), style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(R.string.demo_no_staff), style = MaterialTheme.typography.bodyLarge)
+        PrimaryAction(text = stringResource(R.string.new_intake), onClick = viewModel::goStart)
     }
 }
 
 @Composable
 private fun FieldEditScreen(state: AppUiState, viewModel: AppViewModel) {
-    ScreenScaffold(state.editingField.orEmpty(), state.error) {
+    PaperScaffold {
+        BrandMark()
+        Text(fieldTitle(state.editingField), style = MaterialTheme.typography.headlineLarge)
         Text(stringResource(R.string.dependent_review), style = MaterialTheme.typography.bodySmall)
-        OutlinedTextField(state.editingValue, viewModel::onEditValue, modifier = Modifier.fillMaxWidth())
-        Button(onClick = { viewModel.submitField("set") }, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text(stringResource(R.string.send)) }
+        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        OutlinedTextField(state.editingValue, viewModel::onEditValue, modifier = Modifier.fillMaxWidth(), colors = paperFieldColors())
+        PrimaryAction(text = stringResource(R.string.send), onClick = { viewModel.submitField("set") })
         if (state.editingField == "cause") {
-            OutlinedButton(onClick = { viewModel.submitField("mark_unknown") }, modifier = Modifier.fillMaxWidth().height(48.dp)) {
-                Text(stringResource(R.string.i_dont_know))
+            TextButton(onClick = { viewModel.submitField("mark_unknown") }) { Text(stringResource(R.string.i_dont_know)) }
+        }
+        TextButton(onClick = { viewModel.submitField("clear") }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
+            Text(stringResource(R.string.clear_field))
+        }
+        TextButton(onClick = viewModel::goConversation, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
+            Text(stringResource(R.string.cancel))
+        }
+    }
+}
+
+@Composable
+private fun PaperScaffold(
+    footer: (@Composable ColumnScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
+        Box(
+            Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .imePadding()
+                .navigationBarsPadding(),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Column(
+                Modifier
+                    .widthIn(max = 720.dp)
+                    .fillMaxSize()
+                    .padding(horizontal = 24.dp, vertical = 20.dp),
+            ) {
+                Column(
+                    Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalAlignment = Alignment.Start,
+                    content = content,
+                )
+                if (footer != null) {
+                    Spacer(Modifier.height(16.dp))
+                    footer()
+                }
             }
         }
-        TextButton(onClick = { viewModel.submitField("clear") }) { Text(stringResource(R.string.clear_field)) }
-        TextButton(onClick = viewModel::goConversation) { Text(stringResource(R.string.cancel)) }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ScreenScaffold(title: String, error: String?, content: @Composable () -> Unit) {
-    Scaffold(topBar = { CenterAlignedTopAppBarSafe(title) }) { padding ->
-        Column(
-            Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(20.dp).widthIn(max = 720.dp).alignWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            horizontalAlignment = Alignment.Start,
-        ) {
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            content()
+private fun BrandTopBar() {
+    Column {
+        TopAppBar(
+            title = { BrandMark() },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background,
+                titleContentColor = MaterialTheme.colorScheme.onBackground,
+            ),
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+    }
+}
+
+@Composable
+private fun PrivacyFooter() {
+    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Icon(
+            Icons.Outlined.Lock,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp).padding(top = 2.dp),
+        )
+        Text(stringResource(R.string.privacy_safe), style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun BrandMark() {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Icon(
+            painter = painterResource(R.drawable.ic_house_mark),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.size(22.dp),
+        )
+        Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+@Composable
+private fun PrimaryAction(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    contentDescription: String? = null,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .then(if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier),
+        shape = MaterialTheme.shapes.medium,
+        colors = paperPrimaryButton(),
+        contentPadding = ButtonDefaults.ContentPadding,
+    ) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Text(text, style = MaterialTheme.typography.labelLarge)
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                modifier = Modifier.align(Alignment.CenterEnd),
+            )
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CenterAlignedTopAppBarSafe(title: String) {
-    CenterAlignedTopAppBar(title = { Text(title) })
-}
+private fun paperPrimaryButton() = ButtonDefaults.buttonColors(
+    containerColor = MaterialTheme.colorScheme.primary,
+    contentColor = MaterialTheme.colorScheme.onPrimary,
+    disabledContainerColor = MaterialTheme.colorScheme.outline,
+    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+)
 
-private fun Modifier.alignWidth() = this.fillMaxWidth()
+@Composable
+private fun paperOutlineButton() = ButtonDefaults.outlinedButtonColors(
+    contentColor = MaterialTheme.colorScheme.onBackground,
+)
+
+@Composable
+private fun paperFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = MaterialTheme.colorScheme.primary,
+    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+    focusedContainerColor = MaterialTheme.colorScheme.surface,
+    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+)
 
 @Composable
 private fun Transcript(lines: List<TranscriptLine>) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         lines.forEach { line ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp)) {
-                    Text(line.speaker, style = MaterialTheme.typography.labelMedium)
-                    Text(line.text)
-                }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    if (line.speaker == "assistant") stringResource(R.string.app_name) else line.speaker,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Text(line.text, style = MaterialTheme.typography.bodyLarge)
             }
         }
     }
@@ -271,10 +440,15 @@ private fun AddressCandidatesCard(intake: Intake?, onVerify: (String) -> Unit) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         candidates.forEach { candidate ->
-            Card(Modifier.fillMaxWidth().clickable { onVerify(candidate.candidateId) }) {
-                Column(Modifier.padding(12.dp)) {
+            Surface(
+                modifier = Modifier.fillMaxWidth().clickable { onVerify(candidate.candidateId) },
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(candidate.displayAddress, style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(R.string.verify_address), style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.verify_address), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
@@ -283,21 +457,40 @@ private fun AddressCandidatesCard(intake: Intake?, onVerify: (String) -> Unit) {
 
 @Composable
 private fun LedoCard(intake: Intake?, onField: (String) -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(R.string.what_we_know), style = MaterialTheme.typography.titleMedium)
-            listOf("location" to R.string.location, "element" to R.string.element, "defect" to R.string.defect, "cause" to R.string.cause).forEach { (key, label) ->
-                val field = intake?.fields?.get(key)
-                Row(Modifier.fillMaxWidth().clickable { onField(key) }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(stringResource(label))
-                    Text(fieldLabel(field?.state, field?.value))
-                }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(stringResource(R.string.what_we_know), style = MaterialTheme.typography.titleMedium)
+        listOf("location" to R.string.location, "element" to R.string.element, "defect" to R.string.defect, "cause" to R.string.cause).forEachIndexed { index, (key, label) ->
+            if (index > 0) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             }
-            intake?.hypotheses.orEmpty().forEach {
-                Text(stringResource(R.string.possible_cause) + ": " + (it.text ?: ""), style = MaterialTheme.typography.bodySmall)
+            val field = intake?.fields?.get(key)
+            Row(
+                Modifier.fillMaxWidth().clickable { onField(key) }.padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(label), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(fieldLabel(field?.state, field?.value), style = MaterialTheme.typography.titleMedium)
             }
         }
+        intake?.hypotheses.orEmpty().forEach {
+            Text(stringResource(R.string.possible_cause) + ": " + (it.text ?: ""), style = MaterialTheme.typography.bodySmall)
+        }
     }
+}
+
+@Composable
+private fun StatusChip(label: String) {
+    Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun fieldTitle(key: String?): String = when (key) {
+    "location" -> stringResource(R.string.location)
+    "element" -> stringResource(R.string.element)
+    "defect" -> stringResource(R.string.defect)
+    "cause" -> stringResource(R.string.cause)
+    else -> key.orEmpty()
 }
 
 @Composable

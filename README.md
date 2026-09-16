@@ -1,6 +1,6 @@
 # Woningtriage
 
-Een zelfstandige Android-app die bewoners via een gesproken of getypt gesprek helpt een probleem in huis te beschrijven. De intake gebruikt **LEDO: Locatie, Element, Defect, Oorzaak**. Het gesprek begint in het Nederlands. Het resultaat is één melding met een Nederlandse werkomschrijving, een door de bewoner gecontroleerd adres en de tekstuele gespreksdetails.
+Een zelfstandige Android-app die bewoners via een gesproken of getypt gesprek helpt een probleem in huis te beschrijven. De intake gebruikt **LEDO: Ruimte, Element, Defect, Oorzaak**, altijd onder gebouwtype Woning. Het gesprek begint in het Nederlands. Het resultaat is één melding met een Nederlandse werkomschrijving, een door de bewoner gecontroleerd adres en de tekstuele gespreksdetails.
 
 **Projectfase:** verticale demo v1. Symfony-backend en Android-app staan in deze repository. GPT-Live en de productieclassificatieboom zijn aangesloten als contract; live providerproeven vereisen credentials die niet in git staan.
 

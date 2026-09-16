@@ -7,10 +7,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.ui.graphics.Color
 import nl.woningtriage.app.ui.AppViewModel
 import nl.woningtriage.app.ui.WoningtriageRoot
+import nl.woningtriage.app.ui.WoningtriageTheme
 
 class MainActivity : ComponentActivity() {
     private val app get() = application as WoningtriageApp
@@ -22,14 +21,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MaterialTheme(
-                colorScheme = lightColorScheme(
-                    primary = Color(0xFF1B4D3E),
-                    secondary = Color(0xFFC4A35A),
-                    background = Color(0xFFF4F1EA),
-                ),
-            ) {
-                Surface { WoningtriageRoot(viewModel) }
+            WoningtriageTheme {
+                Surface(color = MaterialTheme.colorScheme.background) { WoningtriageRoot(viewModel) }
             }
         }
     }
