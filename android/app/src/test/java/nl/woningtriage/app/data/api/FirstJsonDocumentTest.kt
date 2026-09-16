@@ -22,4 +22,10 @@ class FirstJsonDocumentTest {
         val first = """{"text":"abc } def"}"""
         assertEquals(first, firstJsonDocument(first + """{"error":true}"""))
     }
+
+    @Test
+    fun readsApiErrorMessage() {
+        val raw = """{"error":{"code":"invalid_value","message":"Ongeldige postcode.","request_id":"abc"}}"""
+        assertEquals("Ongeldige postcode.", parseApiErrorMessage(raw))
+    }
 }

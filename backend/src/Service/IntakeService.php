@@ -389,6 +389,10 @@ final class IntakeService
     ): Intake {
         $this->assertMutable($intake);
         $intake->assertExpectedRevision($expectedRevision);
+        $channel = trim($channel);
+        if ($channel === '') {
+            $channel = 'ui';
+        }
         if (!in_array($channel, ['voice', 'ui'], true)) {
             throw new ValidationFailedException('Ongeldig bevestigingskanaal.');
         }
@@ -399,9 +403,29 @@ final class IntakeService
             $evidenceMessageId = null;
         }
         $document = $intake->document();
+        $current = is_array($document->address) ? $document->address : [];
+        $lookupId = trim($lookupId);
+        if ($lookupId === '' && is_string($current['lookup_id'] ?? null)) {
+            $lookupId = (string) $current['lookup_id'];
+        }
+        if ($addressRevision <= 0) {
+            $addressRevision = (int) ($current['address_revision'] ?? 0);
+        }
+        $this->addressLookupLogger->log('verify', [
+            'intake_id' => $intake->getId(),
+            'source' => ($current['source'] ?? '') === 'gps' ? 'gps' : 'ui',
+            'intake_revision' => $intake->getRevision(),
+            'address_revision' => $addressRevision,
+            'has_lookup_id' => $lookupId !== '',
+            'has_candidate_id' => trim($candidateId) !== '',
+        ]);
         try {
             $document->verifyAddress($lookupId, $candidateId, $addressRevision, $channel, $evidenceMessageId);
         } catch (\RuntimeException) {
+            $this->addressLookupLogger->log('verify_stale', [
+                'intake_id' => $intake->getId(),
+                'outcome' => 'stale',
+            ]);
             throw new AddressLookupStaleException();
         }
         $document->pendingAddressQuestionId = null;

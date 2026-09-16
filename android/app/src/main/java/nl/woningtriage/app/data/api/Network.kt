@@ -6,6 +6,7 @@ import androidx.security.crypto.MasterKey
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
 import nl.woningtriage.app.BuildConfig
+import nl.woningtriage.app.domain.ApiErrorEnvelope
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -37,7 +38,12 @@ class TokenStore(context: Context) {
 }
 
 fun createApi(tokenStore: TokenStore): WoningtriageApi {
-    val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
+    val json = Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+        encodeDefaults = true
+        coerceInputValues = true
+    }
     val auth = Interceptor { chain ->
         val request = chain.request()
         val builder = request.newBuilder()
@@ -119,4 +125,20 @@ internal fun firstJsonDocument(raw: String): String {
         }
     }
     return raw
+}
+
+internal fun parseApiErrorMessage(raw: String): String? {
+    val json = runCatching {
+        Json { ignoreUnknownKeys = true }.decodeFromString(ApiErrorEnvelope.serializer(), raw.trim())
+    }.getOrNull() ?: return null
+    return json.error.message.takeIf { it.isNotBlank() }
+}
+
+internal fun userFacingApiError(error: Throwable): String {
+    if (error is retrofit2.HttpException) {
+        val raw = error.response()?.errorBody()?.string().orEmpty()
+        parseApiErrorMessage(firstJsonDocument(raw))?.let { return it }
+        return "De server wees het verzoek af (${error.code()})."
+    }
+    return error.message ?: "Er ging iets mis."
 }

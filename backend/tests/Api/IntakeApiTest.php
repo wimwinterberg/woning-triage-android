@@ -291,6 +291,30 @@ final class IntakeApiTest extends WebTestCase
         self::assertSame(14, $verified['address']['house_number']);
     }
 
+    public function testGpsVerifyAcceptsOmittedChannelAndZeroAddressRevision(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $lookup = $this->postJson('/api/v1/intakes/'.$intake['id'].'/address-lookups', $this->tokenA, [
+            'expected_revision' => 0,
+            'latitude' => 52.10504918,
+            'longitude' => 5.14592574,
+            'nearby' => [
+                ['postcode' => '1234 AB', 'house_number' => 12],
+            ],
+        ], 'g-omit-lookup');
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        $candidateId = $intake['address']['candidates'][0]['candidate_id'];
+        $verified = $this->postJson('/api/v1/intakes/'.$intake['id'].'/address-verifications', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'lookup_id' => '',
+            'candidate_id' => $candidateId,
+            'address_revision' => 0,
+        ], 'g-omit-verify');
+        self::assertSame('verified', $verified['address']['verification_status']);
+        self::assertSame('Voorbeeldstraat', $verified['address']['street']);
+        self::assertSame(12, $verified['address']['house_number']);
+    }
+
     public function testGpsLookupRejectsForeignCoordinatesAndEmptyHintsStayUnverified(): void
     {
         $intake = $this->createIntake($this->tokenA);

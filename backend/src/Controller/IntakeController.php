@@ -211,13 +211,28 @@ final class IntakeController extends AbstractController
         if ($existing !== null) {
             return new JsonResponse($existing->getResponseBody(), $existing->getStatusCode());
         }
+        $channel = trim((string) ($body['confirmation_channel'] ?? 'ui'));
+        if ($channel === '') {
+            $channel = 'ui';
+        }
+        $addressRevision = array_key_exists('address_revision', $body) && is_numeric($body['address_revision'])
+            ? (int) $body['address_revision']
+            : 0;
+        OperationalLog::write(sprintf(
+            'address-verify start intake=%s revision=%d expected=%s candidate=%d lookup=%d',
+            $id,
+            $intake->getRevision(),
+            is_numeric($body['expected_revision'] ?? null) ? (string) (int) $body['expected_revision'] : 'missing',
+            isset($body['candidate_id']) && is_string($body['candidate_id']) && $body['candidate_id'] !== '' ? 1 : 0,
+            isset($body['lookup_id']) && is_string($body['lookup_id']) && $body['lookup_id'] !== '' ? 1 : 0,
+        ));
         $intake = $this->intakeService->verifyAddress(
             $intake,
             $this->intValue($body, 'expected_revision'),
             (string) ($body['lookup_id'] ?? ''),
             (string) ($body['candidate_id'] ?? ''),
-            $this->intValue($body, 'address_revision'),
-            (string) ($body['confirmation_channel'] ?? 'ui'),
+            $addressRevision,
+            $channel,
             isset($body['evidence_message_id']) ? (string) $body['evidence_message_id'] : null,
         );
         $payload = $this->intakeService->present($intake);

@@ -200,7 +200,7 @@ private fun ConversationScreen(state: AppUiState, viewModel: AppViewModel) {
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Transcript(state.transcript)
             LedoCard(state.intake, onField = viewModel::openField)
-            AddressCandidatesCard(state.intake, onVerify = viewModel::verifyCandidate)
+            AddressCandidatesCard(state.intake, state.selectedCandidateId, onVerify = viewModel::verifyCandidate)
             UseMyLocationButton(state, viewModel)
             TextButton(onClick = viewModel::goAddress, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary)) {
                 Text(stringResource(R.string.lookup_address))
@@ -222,9 +222,9 @@ private fun AddressScreen(state: AppUiState, viewModel: AppViewModel) {
         OutlinedTextField(state.houseNumber, viewModel::onHouseNumber, label = { Text(stringResource(R.string.house_number)) }, modifier = Modifier.fillMaxWidth(), colors = paperFieldColors())
         OutlinedTextField(state.addition, viewModel::onAddition, label = { Text(stringResource(R.string.addition)) }, modifier = Modifier.fillMaxWidth(), colors = paperFieldColors())
         PrimaryAction(text = stringResource(R.string.lookup_address), onClick = viewModel::lookupAddress, enabled = !state.busy)
-        AddressCandidatesCard(state.intake, onVerify = viewModel::verifyCandidate)
+        AddressCandidatesCard(state.intake, state.selectedCandidateId, onVerify = viewModel::verifyCandidate)
         if (state.intake?.address?.verificationStatus == "verified") {
-            PrimaryAction(text = stringResource(R.string.confirm), onClick = viewModel::requestSummary)
+            Text(stringResource(R.string.address_saved), style = MaterialTheme.typography.titleMedium)
         }
         TextButton(onClick = viewModel::goConversation, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
             Text(stringResource(R.string.adjust))
@@ -439,11 +439,12 @@ private fun Transcript(lines: List<TranscriptLine>) {
 }
 
 @Composable
-private fun AddressCandidatesCard(intake: Intake?, onVerify: (String) -> Unit) {
+private fun AddressCandidatesCard(intake: Intake?, selectedId: String?, onVerify: (String) -> Unit) {
     val candidates = intake?.address?.candidates.orEmpty()
     if (candidates.isEmpty()) {
         return
     }
+    val verifiedId = intake?.address?.candidateId
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (candidates.size > 1) {
             Text(stringResource(R.string.several_addresses), style = MaterialTheme.typography.titleMedium)
@@ -451,15 +452,24 @@ private fun AddressCandidatesCard(intake: Intake?, onVerify: (String) -> Unit) {
             Text(stringResource(R.string.pick_address), style = MaterialTheme.typography.titleMedium)
         }
         candidates.forEach { candidate ->
+            val chosen = candidate.candidateId == selectedId || candidate.candidateId == verifiedId
             Surface(
                 modifier = Modifier.fillMaxWidth().clickable { onVerify(candidate.candidateId) },
                 shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                color = if (chosen) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, if (chosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(candidate.displayAddress, style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(R.string.verify_address), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        if (chosen && intake?.address?.verificationStatus == "verified") {
+                            stringResource(R.string.address_saved)
+                        } else {
+                            stringResource(R.string.verify_address)
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
                 }
             }
         }

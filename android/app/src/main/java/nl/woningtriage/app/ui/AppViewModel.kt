@@ -13,6 +13,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import nl.woningtriage.app.data.api.AddressLookupRequest
+import nl.woningtriage.app.data.api.AddressLookupResponse
 import nl.woningtriage.app.data.api.AddressVerifyRequest
 import nl.woningtriage.app.location.DeviceAddressLocator
 import nl.woningtriage.app.data.api.ConfirmationRequest
@@ -24,6 +25,8 @@ import nl.woningtriage.app.data.api.RevisionRequest
 import nl.woningtriage.app.data.api.TokenStore
 import nl.woningtriage.app.data.api.VoiceStartRequest
 import nl.woningtriage.app.data.api.WoningtriageApi
+import nl.woningtriage.app.data.api.userFacingApiError
+import nl.woningtriage.app.domain.AddressState
 import nl.woningtriage.app.domain.Intake
 import nl.woningtriage.app.voice.VoiceSessionClient
 import java.util.UUID
@@ -49,6 +52,7 @@ data class AppUiState(
     val editingValue: String = "",
     val preferTyping: Boolean = false,
     val voiceSessionId: String? = null,
+    val selectedCandidateId: String? = null,
 )
 
 enum class Screen { Activation, Start, Conversation, Address, Review, Completed, ReviewRequired, FieldEdit }
@@ -141,19 +145,23 @@ class AppViewModel(
 
     fun lookupAddress() = run("address") {
         val intake = _state.value.intake ?: return@run
-        val number = _state.value.houseNumber.toIntOrNull() ?: return@run
-        api.lookupAddress(
+        val postcode = _state.value.postcode.trim()
+        val number = _state.value.houseNumber.toIntOrNull()
+        if (postcode.isEmpty() || number == null) {
+            _state.value = _state.value.copy(error = "Vul postcode en huisnummer in.")
+            return@run
+        }
+        val lookup = api.lookupAddress(
             intake.id,
             UUID.randomUUID().toString(),
             AddressLookupRequest(
                 expectedRevision = intake.revision,
-                postcode = _state.value.postcode,
+                postcode = postcode,
                 houseNumber = number,
                 addition = _state.value.addition.ifBlank { null },
             ),
         )
-        refresh(intake.id)
-        _state.value = _state.value.copy(screen = Screen.Address)
+        applyLookup(intake.id, lookup)
     }
 
     fun locationDenied() {
@@ -172,7 +180,7 @@ class AppViewModel(
             throw IllegalStateException(friendlyGpsError(error), error)
         }
         val hints = locator.nearbyAddresses(fix.latitude, fix.longitude)
-        api.lookupAddress(
+        val lookup = api.lookupAddress(
             latest.id,
             UUID.randomUUID().toString(),
             AddressLookupRequest(
@@ -182,24 +190,67 @@ class AppViewModel(
                 nearby = hints,
             ),
         )
-        refresh(latest.id)
-        _state.value = _state.value.copy(screen = Screen.Address)
+        applyLookup(latest.id, lookup)
     }
 
     fun verifyCandidate(candidateId: String) = run("verify") {
-        val intake = _state.value.intake ?: return@run
-        val address = intake.address ?: return@run
-        api.verifyAddress(
-            intake.id,
-            UUID.randomUUID().toString(),
-            AddressVerifyRequest(
-                expectedRevision = intake.revision,
-                lookupId = address.lookupId.orEmpty(),
-                candidateId = candidateId,
-                addressRevision = address.addressRevision ?: 0,
-            ),
+        _state.value = _state.value.copy(selectedCandidateId = candidateId)
+        val verified = postVerify(candidateId)
+        _state.value = _state.value.copy(
+            intake = verified,
+            selectedCandidateId = candidateId,
+            screen = Screen.Address,
+            error = null,
         )
-        refresh(intake.id)
+    }
+
+    private suspend fun applyLookup(intakeId: String, lookup: AddressLookupResponse) {
+        runCatching { refresh(intakeId) }
+        val current = _state.value.intake
+        val merged = if (current != null) {
+            current.copy(
+                revision = lookup.revision,
+                address = (current.address ?: AddressState()).copy(
+                    lookupId = lookup.lookupId,
+                    addressRevision = lookup.addressRevision,
+                    verificationStatus = "unverified",
+                    candidates = lookup.candidates,
+                ),
+            )
+        } else {
+            null
+        }
+        _state.value = _state.value.copy(
+            intake = merged ?: current,
+            selectedCandidateId = null,
+            screen = Screen.Address,
+            error = null,
+        )
+    }
+
+    private suspend fun postVerify(candidateId: String, retried: Boolean = false): Intake {
+        val intake = _state.value.intake ?: throw IllegalStateException("Geen intake.")
+        val address = intake.address ?: throw IllegalStateException("Zoek eerst een adres op.")
+        val lookupId = address.lookupId.orEmpty()
+        return try {
+            api.verifyAddress(
+                intake.id,
+                UUID.randomUUID().toString(),
+                AddressVerifyRequest(
+                    expectedRevision = intake.revision,
+                    lookupId = lookupId,
+                    candidateId = candidateId,
+                    addressRevision = address.addressRevision ?: 0,
+                    confirmationChannel = "ui",
+                ),
+            )
+        } catch (error: retrofit2.HttpException) {
+            if (!retried && error.code() == 409) {
+                refresh(intake.id)
+                return postVerify(candidateId, retried = true)
+            }
+            throw IllegalStateException(userFacingApiError(error), error)
+        }
     }
 
     fun requestSummary() = run("summary") {
@@ -367,7 +418,7 @@ class AppViewModel(
             try {
                 block()
             } catch (error: Exception) {
-                _state.value = _state.value.copy(error = error.message ?: label)
+                _state.value = _state.value.copy(error = userFacingApiError(error))
             } finally {
                 _state.value = _state.value.copy(busy = false)
             }

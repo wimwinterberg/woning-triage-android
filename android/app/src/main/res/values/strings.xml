@@ -41,6 +41,7 @@
     <string name="i_dont_know">Ik weet het niet</string>
     <string name="clear_field">Wissen</string>
     <string name="verify_address">Dit is mijn adres</string>
+    <string name="address_saved">Adres vastgelegd</string>
     <string name="postcode">Postcode</string>
     <string name="house_number">Huisnummer</string>
     <string name="addition">Toevoeging</string>
