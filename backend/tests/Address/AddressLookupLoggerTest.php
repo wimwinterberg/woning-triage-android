@@ -13,7 +13,7 @@ final class AddressLookupLoggerTest extends TestCase
     public function testStripsAddressPiiFromContext(): void
     {
         $records = [];
-        $psr = $this->createMock(LoggerInterface::class);
+        $psr = $this->createStub(LoggerInterface::class);
         $psr->method('info')->willReturnCallback(static function (string $message, array $context) use (&$records): void {
             $records[] = ['message' => $message, 'context' => $context];
         });
