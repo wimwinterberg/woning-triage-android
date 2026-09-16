@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Woningtriage — hoe het nu werkt</title>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "base",
+      themeVariables: {
+        primaryColor: "#dbeafe",
+        primaryTextColor: "#0f172a",
+        primaryBorderColor: "#1d4ed8",
+        lineColor: "#334155",
+        secondaryColor: "#ecfeff",
+        tertiaryColor: "#f8fafc",
+        fontFamily: "ui-sans-serif, system-ui, sans-serif"
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --paper: #fffcf7;
+      --ink: #1c1915;
+      --muted: #5c574e;
+      --line: #ddd6c8;
+      --accent: #0f4c5c;
+      --accent-2: #c45c26;
+      --ok: #1f7a4d;
+      --warn: #9a6700;
+      --chip: #efe8d8;
+      --code: #2a2620;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font: 16px/1.55 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100vh;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      background: #1c1915;
+      color: #f4f1ea;
+      padding: 1.5rem 1.1rem 3rem;
+    }
+    nav h1 {
+      font-size: 1.05rem;
+      margin: 0 0 .35rem;
+      font-weight: 700;
+      letter-spacing: .02em;
+    }
+    nav p { margin: 0 0 1.2rem; color: #c4bbaa; font-size: .82rem; font-family: ui-sans-serif, system-ui, sans-serif; }
+    nav a {
+      display: block;
+      color: #e8e0d2;
+      text-decoration: none;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: .86rem;
+      padding: .32rem 0;
+      border-bottom: 1px solid #2e2a24;
+    }
+    nav a:hover { color: #fff; }
+    main { padding: 2.2rem 2.4rem 5rem; max-width: 980px; }
+    header.hero {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 1.6rem 1.7rem 1.3rem;
+      margin-bottom: 2rem;
+    }
+    header.hero h1 { margin: 0 0 .4rem; font-size: 2rem; line-height: 1.2; }
+    header.hero p { margin: 0; color: var(--muted); }
+    h2 {
+      font-size: 1.45rem;
+      margin: 2.4rem 0 .7rem;
+      padding-top: .4rem;
+      border-top: 1px solid var(--line);
+    }
+    h3 { font-size: 1.12rem; margin: 1.5rem 0 .5rem; }
+    p { margin: .6rem 0; }
+    .muted { color: var(--muted); }
+    .diagram {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 1rem;
+      overflow-x: auto;
+      margin: 1rem 0 1.4rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: .88rem;
+      margin: .8rem 0 1.3rem;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: .45rem .6rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--chip); }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .82rem;
+    }
+    code {
+      background: var(--chip);
+      padding: .08rem .28rem;
+    }
+    pre {
+      background: var(--code);
+      color: #f4f1ea;
+      padding: 1rem 1.1rem;
+      overflow-x: auto;
+      line-height: 1.45;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 1rem 1.1rem;
+    }
+    .card h3 { margin-top: 0; }
+    .who { border-left: 4px solid var(--accent); }
+    .who.ai { border-left-color: var(--accent-2); }
+    .chip {
+      display: inline-block;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: .75rem;
+      background: var(--chip);
+      padding: .12rem .4rem;
+      margin: .1rem .15rem .1rem 0;
+    }
+    .ok { color: var(--ok); font-weight: 700; }
+    .warn { color: var(--warn); font-weight: 700; }
+    ul { margin: .4rem 0 1rem; }
+    li { margin: .25rem 0; }
+    .note {
+      background: #fff6e5;
+      border: 1px solid #e8d7a8;
+      padding: .8rem 1rem;
+      margin: 1rem 0;
+    }
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; }
+      nav { position: static; height: auto; }
+      main { padding: 1.2rem 1rem 3rem; }
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+<nav>
+  <h1>Woningtriage</h1>
+  <p>Werking v1 · branch do-app-platform · prompt conversation-v6</p>
+  <a href="#overzicht">1. Overzicht</a>
+  <a href="#wie-doet-wat">2. Wie doet wat</a>
+  <a href="#architectuur">3. Architectuur</a>
+  <a href="#sessie">4. Spraaksessie starten</a>
+  <a href="#beurt">5. Eén gespreksbeurt</a>
+  <a href="#tools">6. AI-calls en “tools”</a>
+  <a href="#ledo">7. LEDO-beslisboom</a>
+  <a href="#adres">8. Postcode en WCS</a>
+  <a href="#afronden">9. Samenvatting en melding</a>
+  <a href="#typen">10. Typen vs spraak</a>
+  <a href="#android">11. Android</a>
+  <a href="#events">12. Events en logs</a>
+</nav>
+<main>
+<header class="hero">
+  <h1>Hoe Woningtriage nu werkt</h1>
+  <p>
+    Een bewoner beschrijft een probleem in de huurwoning. GPT-Live voert het gesprek.
+    De Symfony-backend is de bron van waarheid: die vult LEDO, zoekt het adres op,
+    maakt de samenvatting en legt de melding vast. Het model mag niets “opslaan”
+    totdat de backend dat zegt.
+  </p>
+</header>
+
+<section id="overzicht">
+  <h2>1. Overzicht</h2>
+  <p>
+    Het product is één intake per gesprek. De structuur is <strong>LEDO</strong>:
+    locatie, element, defect, oorzaak. Daarna postcode + huisnummer, live adreslookup,
+    bevestiging, samenvatting, en pas dan een report.
+  </p>
+  <div class="diagram">
+    <pre class="mermaid">
+flowchart LR
+  B["Bewoner"] -->|spraak of typen| A["Android-app"]
+  A -->|"REST /api/v1"| API["Symfony API"]
+  A <-->|"WebRTC audio + oai-events"| G["GPT-Live"]
+  W["live-gateway worker"] <-->|"sideband WSS attach"| G
+  W -->|"runAnalysis"| S["IntakeService"]
+  API --> S
+  S --> DB[("PostgreSQL")]
+  S -->|"GET /v1/postcode/{pc}/{nr}"| WCS["WCS Address API"]
+    </pre>
+  </div>
+  <p class="muted">
+    Docker: <code>api</code> op poort 8000, <code>database</code> alleen intern,
+    <code>live-gateway</code> via <code>--profile live</code>. Optioneel ngrok voor een fysieke telefoon.
+  </p>
+</section>
+
+<section id="wie-doet-wat">
+  <h2>2. Wie doet wat</h2>
+  <div class="grid-2">
+    <article class="card who ai">
+      <h3>GPT-Live (het model)</h3>
+      <ul>
+        <li>Praat Nederlands, groet meteen, één korte vraag per keer.</li>
+        <li>Spraak-in en spraak-uit over WebRTC.</li>
+        <li>Transcriptie (STT) en spraaksynthese (TTS).</li>
+        <li>Delegeert feiten, adres en bevestigingen naar de backend.</li>
+        <li>Leest de <em>backendvraag</em> hardop voor. Zoekt zelf geen adressen op.</li>
+        <li>Zegt niet dat de melding is opgeslagen tot de backend <code>De melding is vastgelegd.</code> stuurt.</li>
+      </ul>
+    </article>
+    <article class="card who">
+      <h3>Backend (bron van waarheid)</h3>
+      <ul>
+        <li>Houdt het intakedossier bij (JSON-document + revisie).</li>
+        <li>Haalt LEDO-velden uit de tekst (heuristiek, geen extra LLM).</li>
+        <li>Parst gesproken postcodes en belt WCS.</li>
+        <li>Bepaalt de volgende vraag via de beslisboom.</li>
+        <li>Schrijft de echte samenvatting en maakt het report.</li>
+      </ul>
+    </article>
+  </div>
+  <p>
+    Android toont het dossier, start WebRTC, en pollt de intake elke 700&nbsp;ms
+    zodat LEDO tijdens het praten meeloopt. De app belt GPT-Live niet zelf voor analyse.
+  </p>
+</section>
+
+<section id="architectuur">
+  <h2>3. Architectuur</h2>
+  <table>
+    <thead>
+      <tr><th>Onderdeel</th><th>Wat het doet</th><th>Belangrijke plek</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Android</td>
+        <td>UI, microfoon, speakerphone, WebRTC, poll</td>
+        <td><code>android/.../voice/GptLiveVoiceClient.kt</code></td>
+      </tr>
+      <tr>
+        <td>Symfony API</td>
+        <td>Auth, intakes, voice-session aanmaken, typen</td>
+        <td><code>backend/src/Controller/</code> · <code>:8000</code></td>
+      </tr>
+      <tr>
+        <td>live-gateway</td>
+        <td>Langlopende PHP-worker; hangt aan GPT-Live sideband</td>
+        <td><code>woningtriage:live-gateway</code></td>
+      </tr>
+      <tr>
+        <td>PostgreSQL 16</td>
+        <td>Intakes, voice sessions, events, reports</td>
+        <td>Compose-service <code>database</code></td>
+      </tr>
+      <tr>
+        <td>GPT-Live</td>
+        <td>Sessie, audio, transcript, client-delegatie</td>
+        <td><code>POST /v1/live/sessions</code> · model <code>gpt-live-1</code></td>
+      </tr>
+      <tr>
+        <td>WCS Address API</td>
+        <td>NL-adres bij postcode + huisnummer</td>
+        <td><code>https://address-api.createsolutions.dev</code></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="sessie">
+  <h2>4. Een spraaksessie starten</h2>
+  <p>Zonder deze keten praat het model niet, of praat het zonder dossier.</p>
+  <div class="diagram">
+    <pre class="mermaid">
+sequenceDiagram
+  participant App as Android
+  participant API as Symfony API
+  participant OA as GPT-Live HTTP
+  participant GW as live-gateway
+  participant SB as GPT-Live sideband
+
+  App->>App: WebRTC offer + datachannel oai-events
+  App->>API: POST /api/v1/intakes input_mode=voice
+  App->>App: watchIntake elke 700ms
+  App->>API: POST /intakes/{id}/voice-sessions sdp_offer
+  API->>OA: POST /v1/live/sessions<br/>instructions=conversation-v6<br/>delegation.type=client<br/>transport=webrtc
+  OA-->>API: session id + sdp_answer
+  API->>API: VoiceSession in Postgres, enqueue worker
+  API-->>App: live=true + sdp_answer
+  App->>App: applyRemoteAnswer, audio
+  GW->>SB: WSS .../sessions/{id}/attach
+  Note over GW,SB: greeting: instructions.append → wacht op appended → commentary.append
+  GW->>SB: Zeg exact: Hallo, ik help u ... Wat is er aan de hand in uw woning?
+    </pre>
+  </div>
+  <h3>Begroeting</h3>
+  <p>
+    Alleen <code>instructions</code> bij het aanmaken van de sessie is niet genoeg:
+    het model gaat dan niet vanzelf praten. Na <code>session.started</code> stuurt de
+    worker (en als fallback ook Android) daarom:
+  </p>
+  <ol>
+    <li><code>session.instructions.append</code> — “zeg dit exact, pauzeer daarna”</li>
+    <li>wacht op <code>session.instructions.appended</code></li>
+    <li><code>session.commentary.append</code> — “zeg nu hardop tegen de bewoner: …”</li>
+  </ol>
+  <p>
+    De gesproken zin is altijd huurwoning, nooit de vraag huur/koop.
+    Als er al audio loopt, slaat de worker een dubbele groet over.
+  </p>
+</section>
+
+<section id="beurt">
+  <h2>5. Eén gespreksbeurt</h2>
+  <p>
+    Elke keer dat de bewoner iets relevants zegt, delegeert GPT-Live naar de client.
+    De worker heeft het transcript al opgebouwd uit <code>session.input_transcript.delta</code>.
+  </p>
+  <div class="diagram">
+    <pre class="mermaid">
+sequenceDiagram
+  participant B as Bewoner
+  participant G as GPT-Live
+  participant W as live-gateway
+  participant I as IntakeService
+  participant WCS as WCS Address API
+
+  B->>G: spraak
+  G->>W: input_transcript.delta (accumuleren)
+  G->>W: session.delegation.created target=client
+  W->>G: session.thinking.append<br/>"Backend werkt het dossier bij. Wacht."
+  alt leeg transcript
+    W->>G: commentary: wacht, stel geen nieuwe vraag
+  else er is tekst
+    W->>I: runAnalysis(transcript)
+    I->>I: HeuristicIntakeAnalyzer + beslisboom
+    opt postcode + huisnummer compleet
+      I->>WCS: GET /v1/postcode/{pc}/{nr}
+      WCS-->>I: 0, 1 of meer kandidaten
+    end
+    I-->>W: next_question.text
+    alt dezelfde vraag als daarvoor
+      W->>G: commentary: herhaal niet woordelijk, vraag anders
+    else nieuwe vraag
+      W->>G: commentary: "Zeg nu hardop: {vraag}"
+    end
+  end
+  G->>B: gesproken vraag
+    </pre>
+  </div>
+  <p>
+    Na de delegatie wordt het lokale transcript leeggemaakt. De volgende beurt
+    begint opnieuw. Spraak legt <em>geen</em> <code>IntakeMessage</code> van de
+    bewoner vast; alleen het dossier wordt bijgewerkt.
+  </p>
+</section>
+
+<section id="tools">
+  <h2>6. AI-calls en “tools”</h2>
+  <p>
+    Er zijn <strong>geen OpenAI function tools</strong>. Geen JSON-schema voor
+    <code>lookup_address</code> of <code>save_field</code>. Het enige koppelpunt
+    is <strong>client-delegatie</strong>.
+  </p>
+  <h3>Call 1 — sessie aanmaken</h3>
+  <pre>POST https://api.openai.com/v1/live/sessions
+OpenAI-Beta: live=v1
+
+{
+  "session": {
+    "model": "gpt-live-1",
+    "instructions": "&lt;conversation-v6&gt;",
+    "delegation": { "type": "client" }
+  },
+  "transport": { "type": "webrtc", "sdp": "&lt;offer van de telefoon&gt;" }
+}</pre>
+  <h3>Call 2 — sideband (WebSocket)</h3>
+  <pre>WSS wss://api.openai.com/v1/live/sessions/{id}/attach</pre>
+  <p>Events die de worker gebruikt:</p>
+  <table>
+    <thead><tr><th>Event</th><th>Richting</th><th>Functie</th></tr></thead>
+    <tbody>
+      <tr><td><code>session.started</code></td><td>van GPT-Live</td><td>Sessie klaar; groet mag</td></tr>
+      <tr><td><code>session.instructions.append</code></td><td>naar GPT-Live</td><td>Extra instructie (groet)</td></tr>
+      <tr><td><code>session.instructions.appended</code></td><td>van GPT-Live</td><td>Ack; daarna commentary</td></tr>
+      <tr><td><code>session.commentary.append</code></td><td>naar GPT-Live</td><td>“Zeg dit hardop”</td></tr>
+      <tr><td><code>session.thinking.append</code></td><td>naar GPT-Live</td><td>Wacht, backend is bezig</td></tr>
+      <tr><td><code>session.input_transcript.delta</code></td><td>van GPT-Live</td><td>STT-stukjes van de bewoner</td></tr>
+      <tr><td><code>session.output_transcript.delta</code></td><td>van GPT-Live</td><td>Wat het model zegt (alleen log)</td></tr>
+      <tr><td><code>session.delegation.created</code></td><td>van GPT-Live</td><td><strong>De enige tool</strong></td></tr>
+      <tr><td><code>session.closed</code></td><td>van GPT-Live</td><td>Einde</td></tr>
+    </tbody>
+  </table>
+  <h3>Call 3 — sessie sluiten</h3>
+  <pre>POST https://api.openai.com/v1/live/sessions/{id}/close</pre>
+  <h3>Wat de delegatie wél en niet is</h3>
+  <ul>
+    <li><span class="chip">wel</span> Het model stopt even en zegt: dit is werk voor de client/backend.</li>
+    <li><span class="chip">wel</span> De worker koppelt daar het verzamelde transcript aan en draait <code>IntakeService::runAnalysis</code>.</li>
+    <li><span class="chip">niet</span> Het model krijgt geen tool-resultaat als JSON terug. Het krijgt een <em>zin</em> in commentary: de volgende vraag die het hardop moet zeggen.</li>
+    <li><span class="chip">niet</span> WCS wordt nooit door GPT-Live gebeld. Alleen de PHP-backend belt WCS.</li>
+  </ul>
+  <h3>Prompt (conversation-v6), kernregels</h3>
+  <ul>
+    <li>Altijd huurwoning; nooit huur/koop vragen.</li>
+    <li>Eén korte vervolgvraag. Geen kamers, onderdelen of oorzaken verzinnen.</li>
+    <li>Postcode = 4 cijfers + 2 letters; cijfers als woorden; letters via spelalfabet (Simon Johan = SJ).</li>
+    <li>Adreslookup delegeren. “Klopt”, “ja”, “oké” zijn bevestigingen — meteen delegeren.</li>
+    <li>Samenvatting van de backend voorlezen. Niet zeggen dat het is opgeslagen tot <code>De melding is vastgelegd.</code></li>
+    <li>Geen reparatie-advies, geen “monteur gestuurd”, geen planningstijd.</li>
+  </ul>
+</section>
+
+<section id="ledo">
+  <h2>7. LEDO-beslisboom</h2>
+  <p>
+    Boomversie <code>demo-ledo-1</code>. De engine loopt van <code>opening</code>
+    tot de eerste passende vraag. Velden komen uit <code>HeuristicIntakeAnalyzer</code>
+    (woordenlijsten + vrije tekst als de boom om een veld vraagt).
+  </p>
+  <div class="diagram">
+    <pre class="mermaid">
+flowchart TD
+  O["opening<br/>Wat is er aan de hand in uw woning?"]
+  L["ask_location<br/>In welke ruimte?"]
+  E["ask_element<br/>Welk onderdeel?"]
+  D["ask_defect<br/>Wat ziet of hoort u?"]
+  C["ask_cause<br/>Oorzaak bekend of onbekend?"]
+  A["ask_address<br/>Postcode en huisnummer?"]
+  S["terminal_summary<br/>Samenvatting is mogelijk"]
+  R["terminal_review<br/>Niet automatisch afronden"]
+
+  O -->|locatie+element+defect+oorzaak+adres verified| S
+  O -->|LEDO compleet, adres nog niet| A
+  O -->|locatie+element+defect| C
+  O -->|locatie+element| D
+  O -->|alleen locatie| E
+  O -->|niets| L
+  O -->|locatie of element unknown| R
+  L --> E
+  E --> D
+  D --> C
+  C --> A
+  A -->|adres verified| S
+    </pre>
+  </div>
+  <p>
+    Eén zin mag meerdere velden vullen. “Lekkende kraan in de badkamer. Oorzaak onbekend”
+    slaat ask_location / element / defect / cause over en gaat meteen naar het adres.
+  </p>
+  <p>
+    De analyzer verzint nooit een technische oorzaak. Onbekend mag. Vermoedens
+    (“ik denk…”) worden hypothese, geen feit.
+  </p>
+</section>
+
+<section id="adres">
+  <h2>8. Postcode, huisnummer en WCS</h2>
+  <p>
+    GPT-Live spreekt alleen. <code>DutchPostcodeParser</code> maakt er
+    <code>3573 SJ</code> + huisnummer van. Daarna belt <code>WcsAddressProvider</code>
+    de Address API. Fake BAG-straten worden in live nooit getoond
+    (fake provider alleen in tests).
+  </p>
+  <div class="diagram">
+    <pre class="mermaid">
+flowchart TD
+  T["Transcript: vijfendertig drieënzeventig Simon Johan 207"]
+  P["DutchPostcodeParser<br/>3573 SJ / 207"]
+  L{"postcode én huisnummer?"}
+  WCS["GET WCS /v1/postcode/3573SJ/207<br/>Bearer WCS_ADDRESS_API_KEY"]
+  N0["0 hits → zeg postcode/huisnummer opnieuw"]
+  N1["1 hit → Is dit uw adres: Oldenburgerstraat 207, Utrecht?"]
+  N2["meer hits → kies toevoeging"]
+  FAIL["lookup onbeschikbaar → zeg het nog eens"]
+  YES{"Klopt / ja / oké"}
+  VER["verifyAddress op het dossier"]
+  SUM["samenvatting aanbieden"]
+
+  T --> P --> L
+  L -->|nee, alleen postcode| HN["vraag alleen huisnummer"]
+  L -->|nee, alleen nummer| PC["vraag alleen postcode"]
+  L -->|ja| WCS
+  WCS -->|200, 1 item| N1
+  WCS -->|200, meerdere| N2
+  WCS -->|404| N0
+  WCS -->|401/429/503| FAIL
+  N1 --> YES -->|ja| VER --> SUM
+  YES -->|nee / verkeerde postcode| P
+    </pre>
+  </div>
+  <h3>Gesproken postcode</h3>
+  <table>
+    <thead><tr><th>STT-voorbeeld</th><th>Resultaat</th></tr></thead>
+    <tbody>
+      <tr><td><code>3573 Simon Johan 207</code></td><td>3573 SJ / 207</td></tr>
+      <tr><td><code>vijfendertig drieënzeventig Simon Johan</code></td><td>3573 SJ</td></tr>
+      <tr><td><code>vijf dertig drie zeventig Simon Johan twee nul zeven</code></td><td>3573 SJ / 207 (unit+tens twee keer)</td></tr>
+      <tr><td><code>drie vijf zeventig</code></td><td>3573 — STT hoort “zeven drie” vaak als zeventig</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Bevestiging mag alleen het <em>opgezochte</em> adres vastleggen. De backend
+    slaat verificatie niet over om de intake af te ronden.
+  </p>
+</section>
+
+<section id="afronden">
+  <h2>9. Samenvatting en de melding vastleggen</h2>
+  <div class="diagram">
+    <pre class="mermaid">
+flowchart TD
+  V["Adres verified + LEDO compleet"]
+  W["writeSummaryDocument<br/>SummaryComposer maakt resident_text"]
+  Q["Vraag: {samenvatting} Klopt dit?"]
+  Y{"ja / klopt / oké"}
+  C["confirm → Report-rij in Postgres"]
+  D["De melding is vastgelegd."]
+  LOOP["Boomtekst: Ik vat het probleem samen...<br/>zonder summary-document"]
+
+  V --> W --> Q --> Y
+  Y -->|ja, summary bestaat| C --> D
+  V -.->|als summary niet wordt geschreven| LOOP
+    </pre>
+  </div>
+  <p>
+    <code>SummaryComposer</code> maakt iets als:
+    <em>Badkamer: Kraan Lekt. Oorzaak onbekend.</em>
+    De bewoner moet die tekst bevestigen. Daarna ontstaat één <code>Report</code>.
+  </p>
+  <div class="note">
+    <strong>Huidige valkuil.</strong> De boomknoop <code>terminal_summary</code> heeft
+    de plaatshouderzin “Ik vat het probleem samen zodat u het kunt controleren.”
+    Die zin is <em>niet</em> de echte samenvatting. Als de backend die plaatshouder
+    doorstuurt in plaats van <code>{resident_text} Klopt dit?</code>, gaat GPT-Live
+    zelf een samenvatting verzinnen. De bewoner zegt “ja”, maar er is geen
+    summary-document, dus er komt geen report. In de logs zie je dan
+    <code>question_id=terminal_summary</code> blijven hangen.
+  </div>
+</section>
+
+<section id="typen">
+  <h2>10. Typen versus spraak</h2>
+  <table>
+    <thead><tr><th></th><th>Typen</th><th>Spraak</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Ingang</td>
+        <td><code>POST /intakes/{id}/messages</code></td>
+        <td>delegatie → <code>runAnalysis</code></td>
+      </tr>
+      <tr>
+        <td>Bewonerstekst in DB</td>
+        <td>ja, <code>IntakeMessage</code></td>
+        <td>nee, alleen dossiervelden</td>
+      </tr>
+      <tr>
+        <td>Analyse</td>
+        <td colspan="2">dezelfde <code>IntakeService</code> + analyzer + boom + WCS</td>
+      </tr>
+      <tr>
+        <td>Volgende vraag</td>
+        <td>in de API-response / poll</td>
+        <td>commentary naar GPT-Live + poll in de app</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="android">
+  <h2>11. Android</h2>
+  <ul>
+    <li>Activatiecode → Bearer-token (<code>POST /api/v1/auth/activation</code>).</li>
+    <li>Start intake → eventueel voice-session met SDP-offer.</li>
+    <li>Fake-SDP van de backend wordt <em>niet</em> op WebRTC gezet (voorkomt crash).</li>
+    <li><code>watchIntake</code> pollt 700&nbsp;ms; SSE bestaat op de API maar de app gebruikt het niet.</li>
+    <li>Speakerphone, gain 1.0. LEDO-scherm volgt het dossier tijdens het gesprek.</li>
+  </ul>
+</section>
+
+<section id="events">
+  <h2>12. Events en waar je naar kijkt in de logs</h2>
+  <p>Spraakverwerking zit in <code>live-gateway</code>, niet in <code>api</code>.</p>
+  <pre>docker compose --profile live logs -f --timestamps live-gateway api</pre>
+  <table>
+    <thead><tr><th>Logregel</th><th>Betekenis</th></tr></thead>
+    <tbody>
+      <tr><td><code>Attached sideband</code></td><td>Worker hangt aan GPT-Live</td></tr>
+      <tr><td><code>Requested greeting</code></td><td>Begroeting is verstuurd</td></tr>
+      <tr><td><code>input_transcript +N chars</code></td><td>STT-stukje</td></tr>
+      <tr><td><code>delegation … text=…</code></td><td>Model vraagt de backend</td></tr>
+      <tr><td><code>Address lookup hint</code></td><td>Parser vond postcode/huisnummer</td></tr>
+      <tr><td><code>Address lookup finished … item_count=1</code></td><td>WCS 200, één adres</td></tr>
+      <tr><td><code>looked_up=0</code></td><td>Geen lookup: parser of huisnummer mist</td></tr>
+      <tr><td><code>question_id=address_confirm_…</code></td><td>Wacht op Klopt/ja</td></tr>
+      <tr><td><code>question_id=terminal_summary</code></td><td>Plaatshouder, nog geen echte samenvatting</td></tr>
+      <tr><td><code>next_question id = summary_… / Klopt dit?</code></td><td>Echte samenvatting</td></tr>
+      <tr><td><code>intake_confirmed</code> / De melding is vastgelegd</td><td>Report bestaat</td></tr>
+    </tbody>
+  </table>
+  <p class="muted">
+    Live-gateway is een lang lopend PHP-proces. Na een codewijziging:
+    <code>docker compose --profile live up --force-recreate</code>.
+    Bind-mount toont in de API-log <code>WONINGTRIAGE_ENTRYPOINT=2</code>.
+  </p>
+  <h3>Wat expres niet gebeurt</h3>
+  <ul>
+    <li>GPT-Live belt WCS of PDOK niet.</li>
+    <li>PDOK zit niet meer in de code; altijd WCS.</li>
+    <li>Geen function-calling tools.</li>
+    <li>Geen automatische adresverificatie zonder ja/klopt van de bewoner.</li>
+    <li>Geen secrets in git.</li>
+  </ul>
+</section>
+</main>
+</div>
+</body>
+</html>

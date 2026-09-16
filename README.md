@@ -8,6 +8,7 @@ Een zelfstandige Android-app die bewoners via een gesproken of getypt gesprek he
 
 | Document | Inhoud |
 | --- | --- |
+| [Hoe het werkt (HTML)](docs/HOE_HET_WERKT.html) | Flowdiagrammen: spraak, GPT-Live, delegatie, WCS, afronden |
 | [Projectoverzicht](docs/PROJECT_OVERVIEW.md) | Doel, scope, architectuur |
 | [Android-app](docs/ANDROID_SPEC.md) | Schermen en acceptatie |
 | [Symfony-backend](docs/BACKEND_SPEC.md) | Diensten en GPT-Live |
