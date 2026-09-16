@@ -47,11 +47,15 @@ final class ApiExceptionSubscriber implements EventSubscriberInterface
         if (!str_starts_with($path, '/api/')) {
             return;
         }
+        $status = $event->getResponse()->getStatusCode();
+        if ($request->getMethod() === 'GET' && $status < 400) {
+            return;
+        }
         OperationalLog::write(sprintf(
             'api %s %s %d request_id=%s',
             $request->getMethod(),
             $path,
-            $event->getResponse()->getStatusCode(),
+            $status,
             is_string($requestId) ? $requestId : 'unknown',
         ));
     }
@@ -64,6 +68,16 @@ final class ApiExceptionSubscriber implements EventSubscriberInterface
         }
         $requestId = (string) $request->attributes->get('request_id', 'unknown');
         $exception = $event->getThrowable();
+        if ($exception instanceof ApiException && $exception->statusCode >= 500) {
+            OperationalLog::write(sprintf(
+                'api error code=%s status=%d request_id=%s path=%s message=%s',
+                $exception->errorCode,
+                $exception->statusCode,
+                $requestId,
+                $request->getPathInfo(),
+                $exception->getMessage(),
+            ));
+        }
         if (!$exception instanceof ApiException && !$exception instanceof AuthenticationException) {
             $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : 500;
             if ($status >= 500) {

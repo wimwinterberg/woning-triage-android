@@ -6,6 +6,7 @@ namespace App\Live;
 
 use App\Exception\ProviderUnavailableException;
 use App\Exception\ValidationFailedException;
+use App\Http\OperationalLog;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
@@ -59,13 +60,16 @@ final class HttpGptLiveClient implements GptLiveClient
                 'timeout' => 20,
             ]);
             $payload = $response->toArray(false);
+            $status = $response->getStatusCode();
         } catch (\Throwable $exception) {
+            $this->logCreateFailure('exception', 0, [], $exception);
             throw new ProviderUnavailableException('GPT-Live kon geen sessie starten.');
         }
 
         $id = $payload['id'] ?? $payload['session']['id'] ?? null;
         $sdp = $payload['transport']['sdp'] ?? $payload['sdp'] ?? null;
         if (!is_string($id) || !is_string($sdp) || $sdp === '') {
+            $this->logCreateFailure('incomplete', $status, $payload);
             throw new ProviderUnavailableException('GPT-Live gaf een onvolledig sessieantwoord.');
         }
 
@@ -107,5 +111,37 @@ final class HttpGptLiveClient implements GptLiveClient
         }
 
         return round($speed, 2);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function logCreateFailure(string $reason, int $status, array $payload, ?\Throwable $exception = null): void
+    {
+        $error = is_array($payload['error'] ?? null) ? $payload['error'] : [];
+        $openaiType = is_string($error['type'] ?? null) ? $error['type'] : '-';
+        $openaiCode = is_string($error['code'] ?? null) ? $error['code'] : '-';
+        $exceptionClass = $exception !== null ? $exception::class : '-';
+        $exceptionMessage = $exception !== null ? $this->clip($exception->getMessage()) : '-';
+        OperationalLog::write(sprintf(
+            'GPT-Live session create failed reason=%s http_status=%d openai_type=%s openai_code=%s keys=%s exception=%s message=%s',
+            $reason,
+            $status,
+            $openaiType,
+            $openaiCode,
+            implode(',', array_keys($payload)),
+            $exceptionClass,
+            $exceptionMessage,
+        ));
+    }
+
+    private function clip(string $text): string
+    {
+        $text = preg_replace('/Bearer\s+\S+/i', 'Bearer [redacted]', $text) ?? $text;
+        if (mb_strlen($text) <= 180) {
+            return $text;
+        }
+
+        return mb_substr($text, 0, 180).'…';
     }
 }

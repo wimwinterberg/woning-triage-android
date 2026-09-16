@@ -3,9 +3,8 @@
 declare(strict_types=1);
 
 /**
- * php -S router. Symfony Runtime sends the JSON body and then terminate()
- * tries to set a session cookie, which appends a second JSON error the app
- * cannot parse. Handle/send once here and discard leftover output.
+ * php -S router. Send the JSON body only after terminate() so listeners cannot
+ * append a second payload or throw after headers are already sent.
  */
 use App\Kernel;
 use Symfony\Component\Dotenv\Dotenv;
@@ -29,29 +28,23 @@ $debug = filter_var($_SERVER['APP_DEBUG'] ?? $_ENV['APP_DEBUG'] ?? '0', FILTER_V
 $kernel = new Kernel($env, $debug);
 $request = Request::createFromGlobals();
 $response = $kernel->handle($request);
-$content = (string) $response->getContent();
-$response->headers->set('Content-Length', (string) \strlen($content));
-$path = $request->getPathInfo();
-if ($path !== '/' && $path !== '/health' && $path !== '/api/v1/health') {
-    error_log(sprintf(
-        'api %s %s %d bytes=%d',
-        $request->getMethod(),
-        $path,
-        $response->getStatusCode(),
-        strlen($content),
-    ));
-}
-$response->sendHeaders();
-echo $content;
-flush();
 
 ob_start();
 try {
     $kernel->terminate($request, $response);
 } catch (Throwable $exception) {
-    error_log('[router] terminate '.$exception::class);
+    $message = $exception->getMessage();
+    if (!str_contains(strtolower($message), 'headers already sent')) {
+        error_log('[router] terminate '.$exception::class.': '.$message);
+    }
 }
 $extra = ob_get_clean();
 if (is_string($extra) && $extra !== '') {
     fwrite(STDERR, '[router] discarded extra output bytes='.\strlen($extra)."\n");
 }
+
+$content = (string) $response->getContent();
+$response->headers->set('Content-Length', (string) \strlen($content));
+$response->sendHeaders();
+echo $content;
+flush();

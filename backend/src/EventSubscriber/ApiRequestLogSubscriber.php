@@ -11,8 +11,8 @@ use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\HttpKernel\KernelInterface;
 
 /**
- * Writes API timing to STDERR so `docker compose logs -f api` shows how long
- * typed analysis actually took. Voice analysis is logged by live-gateway.
+ * Writes API timing for non-GET work. Voice analysis is logged by live-gateway.
+ * Successful GET polls are skipped so docker logs stay readable.
  */
 final class ApiRequestLogSubscriber implements EventSubscriberInterface
 {
@@ -46,11 +46,13 @@ final class ApiRequestLogSubscriber implements EventSubscriberInterface
         if (in_array($path, ['/health', '/api/v1/health', '/'], true)) {
             return;
         }
+        if ($request->getMethod() === 'GET' && $event->getResponse()->getStatusCode() < 400) {
+            return;
+        }
         $started = $request->attributes->get('_wt_started');
         $ms = is_numeric($started) ? (int) round((microtime(true) - (float) $started) * 1000) : 0;
-        fwrite(STDERR, sprintf(
-            "[%s] %s %s %d %dms\n",
-            gmdate('Y-m-d H:i:s'),
+        \App\Http\OperationalLog::write(sprintf(
+            'api timing %s %s %d %dms',
             $request->getMethod(),
             $path,
             $event->getResponse()->getStatusCode(),
