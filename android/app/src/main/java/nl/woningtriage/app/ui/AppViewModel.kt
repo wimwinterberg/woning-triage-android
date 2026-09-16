@@ -56,6 +56,7 @@ data class AppUiState(
     val uiLocale: String = "nl-NL",
     val showLanguagePicker: Boolean = false,
     val uiOffer: nl.woningtriage.app.domain.UiLanguageOffer? = null,
+    val hasStoredIntake: Boolean = false,
 )
 
 enum class Screen { Activation, Start, Conversation, Address, Review, Completed, ReviewRequired, FieldEdit }
@@ -70,6 +71,7 @@ class AppViewModel(
             hasToken = tokens.accessToken != null,
             screen = if (tokens.accessToken == null) Screen.Activation else Screen.Start,
             uiLocale = tokens.uiLocale,
+            hasStoredIntake = tokens.activeIntakeId != null,
         ),
     )
     val state: StateFlow<AppUiState> = _state
@@ -103,6 +105,7 @@ class AppViewModel(
                     transcript = listOfNotNull(intake.nextQuestion?.text?.let { TranscriptLine("assistant", it) }),
                     connectionLabel = "connecting",
                     uiLocale = intake.uiLanguage ?: _state.value.uiLocale,
+                    hasStoredIntake = true,
                 )
                 watchIntake(intake.id)
                 runCatching {
@@ -126,6 +129,7 @@ class AppViewModel(
             transcript = listOfNotNull(intake.nextQuestion?.text?.let { TranscriptLine("assistant", it) }),
             connectionLabel = "disconnected",
             uiLocale = intake.uiLanguage ?: _state.value.uiLocale,
+            hasStoredIntake = true,
         )
         watchIntake(intake.id)
     }

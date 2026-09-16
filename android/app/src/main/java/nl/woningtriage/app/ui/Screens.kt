@@ -186,7 +186,7 @@ private fun StartScreen(state: AppUiState, viewModel: AppViewModel) {
             Text(stringResource(R.string.prefer_typing), style = MaterialTheme.typography.titleMedium)
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
         }
-        if (state.intake != null || !state.hasToken) {
+        if (state.hasStoredIntake) {
             TextButton(onClick = viewModel::resumeIntake, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
                 Text(stringResource(R.string.resume_intake))
             }

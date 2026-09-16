@@ -35,6 +35,12 @@ class TokenStore(context: Context) {
         set(value) {
             prefs.edit().putString("ui_locale", value).apply()
         }
+
+    var activeIntakeId: String?
+        get() = prefs.getString("active_intake_id", null)
+        set(value) {
+            prefs.edit().putString("active_intake_id", value).apply()
+        }
 }
 
 fun createApi(tokenStore: TokenStore): WoningtriageApi {
