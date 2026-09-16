@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../vendor/symfony/dependency-injection/Loader/schema/services.schema.json
 parameters:
     app.tree_dir: '%kernel.project_dir%/config/trees'
-    app.prompt_version: 'conversation-v12'
+    app.prompt_version: 'conversation-v13'
     app.live_model: 'gpt-live-1'
     env(OPENAI_API_KEY): ''
     env(WCS_ADDRESS_API_KEY): ''
@@ -9,6 +9,7 @@ parameters:
     env(OPENAI_LIVE_SPEED): '1.0'
     env(OPENAI_LIVE_IDLE_PROMPT_SECONDS): '60'
     env(OPENAI_LIVE_IDLE_CLOSE_SECONDS): '180'
+    env(OPENAI_AGENT_MODEL): 'gpt-4.1-mini'
 
 services:
     _defaults:
@@ -59,6 +60,18 @@ services:
             $idlePromptSeconds: '%env(default::OPENAI_LIVE_IDLE_PROMPT_SECONDS)%'
             $idleCloseSeconds: '%env(default::OPENAI_LIVE_IDLE_CLOSE_SECONDS)%'
 
+    App\Agent\ResponsesLanguageSwitchAgent:
+        arguments:
+            $apiKey: '%env(default::OPENAI_API_KEY)%'
+            $model: '%env(default::OPENAI_AGENT_MODEL)%'
+
+    App\Agent\LanguageSwitchAgent:
+        factory: ['App\Agent\LanguageSwitchAgentFactory', 'create']
+        arguments:
+            $http: '@App\Agent\ResponsesLanguageSwitchAgent'
+            $fake: '@App\Agent\FakeLanguageSwitchAgent'
+            $apiKey: '%env(default::OPENAI_API_KEY)%'
+
     App\Analyzer\IntakeAnalyzer: '@App\Analyzer\HeuristicIntakeAnalyzer'
     App\Address\FakeAddressProvider:
         public: true
@@ -71,3 +84,6 @@ when@test:
     services:
         App\Live\GptLiveClient: '@App\Live\FakeGptLiveClient'
         App\Address\AddressProvider: '@App\Address\FakeAddressProvider'
+        App\Agent\LanguageSwitchAgent: '@App\Agent\FakeLanguageSwitchAgent'
+        App\Agent\FakeLanguageSwitchAgent:
+            public: true

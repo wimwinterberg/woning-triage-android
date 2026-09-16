@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Address\AddressLookupLogger;
 use App\Address\AddressProvider;
+use App\Agent\LanguageSwitchAgent;
 use App\Analyzer\IntakeAnalyzer;
 use App\Analyzer\ProposalValidator;
 use App\Classification\ClassificationSearchService;
@@ -52,6 +53,7 @@ final class IntakeService
         private readonly AddressNormalizer $addressNormalizer,
         private readonly SummaryComposer $summaryComposer,
         private readonly ClassificationSearchService $classificationSearch,
+        private readonly LanguageSwitchAgent $languageSwitchAgent,
         private readonly string $promptVersion,
         private readonly LoggerInterface $logger = new NullLogger(),
         private readonly AddressLookupLogger $addressLookupLogger = new AddressLookupLogger(),
@@ -186,7 +188,11 @@ final class IntakeService
             if ($proposal->independentTime !== null) {
                 $document->addIndependentAnswer('observed_since', $proposal->independentTime, $messageId);
             }
-            $switch = LanguageSwitchTool::tryFromResidentText($text);
+            $switch = $this->languageSwitchAgent->decide(
+                $text,
+                $intake->getConversationLanguage(),
+                is_string($document->uiLanguage) ? $document->uiLanguage : null,
+            );
             if ($switch instanceof LanguageSwitchTool) {
                 $switch->apply($intake, $document);
                 if (!$switch->applyUi) {
@@ -197,19 +203,6 @@ final class IntakeService
                     LanguageSwitchTool::NAME,
                     $switch->language,
                     $switch->applyUi ? '1' : '0',
-                    $intake->getConversationLanguage(),
-                    (string) ($document->uiLanguage ?? ''),
-                    is_array($document->uiLanguageOffer) ? (string) ($document->uiLanguageOffer['language'] ?? '') : '',
-                    mb_substr(preg_replace('/\s+/u', ' ', $text) ?? $text, 0, 160),
-                ));
-            } elseif ($proposal->suggestedLanguage !== null) {
-                $intake->setConversationLanguage($proposal->suggestedLanguage);
-                $document->invalidateSummary();
-                $this->maybeOfferUiLanguage($intake, $document);
-                OperationalLog::write(sprintf(
-                    'language suggested=%s explicit=%s apply_ui=0 conversation=%s ui=%s offer=%s text=%s',
-                    $proposal->suggestedLanguage,
-                    $proposal->languageExplicit ? '1' : '0',
                     $intake->getConversationLanguage(),
                     (string) ($document->uiLanguage ?? ''),
                     is_array($document->uiLanguageOffer) ? (string) ($document->uiLanguageOffer['language'] ?? '') : '',

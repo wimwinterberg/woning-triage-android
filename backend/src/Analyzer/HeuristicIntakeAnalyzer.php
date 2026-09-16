@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace App\Analyzer;
 
 use App\Domain\DutchPostcodeParser;
-use App\Domain\LanguageMode;
-use App\Domain\LanguagePolicy;
 use App\Entity\Intake;
 
 /**
@@ -22,7 +20,6 @@ final class HeuristicIntakeAnalyzer implements IntakeAnalyzer
      * @param array<string, list<string>> $defects
      */
     public function __construct(
-        private readonly LanguagePolicy $languagePolicy = new LanguagePolicy(),
         private readonly array $locations = [
             'Keuken' => ['keuken', 'kitchen'],
             'Badkamer' => ['badkamer', 'bathroom', 'douche', 'shower'],
@@ -64,13 +61,6 @@ final class HeuristicIntakeAnalyzer implements IntakeAnalyzer
 
     public function analyze(Intake $intake, string $text, string $messageId, int $baseRevision): AnalysisProposal
     {
-        $explicitLanguage = $this->languagePolicy->isExplicitLanguageRequest($text);
-        $decision = $this->languagePolicy->detectFromResidentText(
-            $text,
-            $explicitLanguage ?? $intake->getConversationLanguage(),
-            $explicitLanguage ? LanguageMode::Auto : $intake->getLanguageMode(),
-        );
-
         $lower = mb_strtolower($text);
         $target = $intake->document()->nextQuestion['target'] ?? null;
         $updates = [];
@@ -116,8 +106,8 @@ final class HeuristicIntakeAnalyzer implements IntakeAnalyzer
             baseRevision: $baseRevision,
             fieldUpdates: $updates,
             hypotheses: $hypotheses,
-            suggestedLanguage: $explicitLanguage ?? ($decision->changed ? $decision->language : null),
-            languageExplicit: $explicitLanguage !== null,
+            suggestedLanguage: null,
+            languageExplicit: false,
             addressHint: $this->extractAddress($text),
             riskSignals: [],
             independentTime: $this->extractTime($text),

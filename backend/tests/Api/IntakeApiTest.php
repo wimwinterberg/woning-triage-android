@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Api;
 
+use App\Agent\FakeLanguageSwitchAgent;
+use App\Domain\LanguageSwitchTool;
 use App\Entity\Intake;
 use App\Service\AuthService;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -27,6 +29,7 @@ final class IntakeApiTest extends WebTestCase
         $provider->fail = false;
         \App\Address\FakeAddressProvider::$failNext = false;
         \App\Address\FakeAddressProvider::$unavailable = false;
+        static::getContainer()->get(FakeLanguageSwitchAgent::class)->reset();
     }
 
     public function testOpenSessionIssuesTokenWithoutActivationCode(): void
@@ -478,6 +481,7 @@ final class IntakeApiTest extends WebTestCase
         $queue = static::getContainer()->get(\App\Live\LiveGatewayCommandQueue::class);
         self::assertNotContains($session['id'], $queue->pending());
 
+        $this->enqueueLanguageSwitch('en-GB', false);
         $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
             'expected_revision' => 0,
             'client_message_id' => 'en1',
@@ -526,6 +530,7 @@ final class IntakeApiTest extends WebTestCase
         self::assertSame('en-GB', $intake['conversation_language']);
         self::assertSame('en-GB', $intake['ui_language']);
 
+        $this->enqueueLanguageSwitch('nl-NL', true);
         $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
             'expected_revision' => $intake['revision'],
             'client_message_id' => 'ui-nl',
@@ -540,6 +545,7 @@ final class IntakeApiTest extends WebTestCase
     public function testSpokenSwitchToEnglishAppliesUiWithoutOffer(): void
     {
         $intake = $this->createIntake($this->tokenA);
+        $this->enqueueLanguageSwitch('en-GB', true);
         $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
             'expected_revision' => $intake['revision'],
             'client_message_id' => 'ui-en-switch',
@@ -554,6 +560,7 @@ final class IntakeApiTest extends WebTestCase
     public function testSpeakEnglishKeepsUiUntilResidentAcceptsOffer(): void
     {
         $intake = $this->createIntake($this->tokenA);
+        $this->enqueueLanguageSwitch('en-GB', false);
         $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
             'expected_revision' => $intake['revision'],
             'client_message_id' => 'speak-en',
@@ -565,6 +572,20 @@ final class IntakeApiTest extends WebTestCase
         self::assertSame('en-GB', $intake['ui_language_offer']['language'] ?? null);
     }
 
+    public function testLanguageDoesNotChangeWithoutAToolCall(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'no-tool',
+            'text' => 'Switch to English',
+        ], 'no-tool-msg', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('nl-NL', $intake['conversation_language']);
+        self::assertSame('nl-NL', $intake['ui_language']);
+        self::assertNull($intake['ui_language_offer']);
+    }
+
     public function testGermanTurkishAndJapaneseSwitchAndStay(): void
     {
         $cases = [
@@ -574,6 +595,7 @@ final class IntakeApiTest extends WebTestCase
         ];
         foreach ($cases as [$clientId, $text, $language]) {
             $intake = $this->createIntake($this->tokenA);
+            $this->enqueueLanguageSwitch($language, false);
             $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
                 'expected_revision' => 0,
                 'client_message_id' => $clientId,
@@ -902,6 +924,12 @@ final class IntakeApiTest extends WebTestCase
     private function createIntake(string $token): array
     {
         return $this->postJson('/api/v1/intakes', $token, ['input_mode' => 'text'], 'create-'.bin2hex(random_bytes(3)), 201);
+    }
+
+    private function enqueueLanguageSwitch(string $language, bool $applyUi): void
+    {
+        static::getContainer()->get(FakeLanguageSwitchAgent::class)
+            ->enqueue(new LanguageSwitchTool($language, $applyUi));
     }
 
     /**
