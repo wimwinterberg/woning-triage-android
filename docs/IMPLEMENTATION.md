@@ -26,7 +26,7 @@ Handshake volgens de officiële docs (geen Realtime `/v1/realtime/calls`):
 
 Zonder `OPENAI_API_KEY` blijft tekstintake werken. Een fake SDP is geen live-bewijs; de API zet `live: false` en de app past het antwoord niet toe. `APP_ENV=dev` (Docker) forceert de fake **niet** als de key gezet is. De live-gateway slaat `prov_fake_*`-sessies over en blijft idle zonder skip-spam. Na een nieuwe key: `docker compose --profile live up --force-recreate`.
 
-Gespreksprompt: `App\Live\ConversationPrompt` (versie `conversation-v2`), Nederlands, alleen huurwoningen, begroet meteen. Analyzer: deterministische heuristic voor CI/demo; geen verzonnen oorzaak.
+Gespreksprompt: `App\Live\ConversationPrompt` (versie `conversation-v6`), Nederlands, alleen huurwoningen, begroet meteen. Analyzer: deterministische heuristic voor CI/demo; geen verzonnen oorzaak. Gesproken "klopt"/"ja" bevestigt adres of samenvatting; daarna zegt de backend de echte samenvatting en na de tweede bevestiging "De melding is vastgelegd."
 
 ## Adres (OPEN-10)
 
