@@ -3,6 +3,7 @@ package nl.woningtriage.app.voice
 interface VoiceSessionClient {
     suspend fun prepareOffer(): String
     suspend fun applyRemoteAnswer(sdpAnswer: String)
+    fun requestOpeningGreeting(openingQuestion: String) {}
     fun setMuted(muted: Boolean)
     fun stop()
     val isSendingAudio: Boolean

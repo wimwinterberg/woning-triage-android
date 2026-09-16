@@ -6,6 +6,7 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
 import org.webrtc.AudioSource
 import org.webrtc.AudioTrack
 import org.webrtc.DataChannel
@@ -21,6 +22,8 @@ import org.webrtc.RtpReceiver
 import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
 import org.webrtc.audio.JavaAudioDeviceModule
+import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
@@ -37,6 +40,9 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
     private var audioDeviceModule: JavaAudioDeviceModule? = null
     private var audioFocusRequest: AudioFocusRequest? = null
     private var observer: ConnectionObserver? = null
+    private var eventsChannel: DataChannel? = null
+    private var pendingOpeningQuestion: String? = null
+    private var greetingSent: Boolean = false
     override var isSendingAudio: Boolean = false
         private set
 
@@ -65,7 +71,14 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
         audioTrack = factory?.createAudioTrack("audio0", audioSource)
         audioTrack?.setEnabled(true)
         peerConnection?.addTrack(audioTrack)
-        peerConnection?.createDataChannel("oai-events", DataChannel.Init())
+        eventsChannel = peerConnection?.createDataChannel("oai-events", DataChannel.Init())
+        eventsChannel?.registerObserver(object : DataChannel.Observer {
+            override fun onBufferedAmountChange(previousAmount: Long) {}
+            override fun onStateChange() {
+                trySendGreeting()
+            }
+            override fun onMessage(buffer: DataChannel.Buffer?) {}
+        })
         val offer = awaitSdp { sdpObserver -> peerConnection?.createOffer(sdpObserver, MediaConstraints()) }
         awaitSet { sdpObserver -> peerConnection?.setLocalDescription(sdpObserver, offer) }
         withTimeoutOrNull(8_000) { observer?.iceComplete?.await() }
@@ -78,6 +91,12 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
         val answer = SessionDescription(SessionDescription.Type.ANSWER, sdpAnswer)
         awaitSet { sdpObserver -> peerConnection?.setRemoteDescription(sdpObserver, answer) }
         routePlaybackLoud()
+        trySendGreeting()
+    }
+
+    override fun requestOpeningGreeting(openingQuestion: String) {
+        pendingOpeningQuestion = openingQuestion
+        trySendGreeting()
     }
 
     override fun setMuted(muted: Boolean) {
@@ -88,6 +107,7 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
     override fun stop() {
         isSendingAudio = false
         audioTrack?.setEnabled(false)
+        runCatching { eventsChannel?.dispose() }
         runCatching { audioTrack?.dispose() }
         runCatching { audioSource?.dispose() }
         runCatching { peerConnection?.close() }
@@ -100,7 +120,34 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
         factory = null
         audioDeviceModule = null
         observer = null
+        eventsChannel = null
+        pendingOpeningQuestion = null
+        greetingSent = false
         releasePlayback()
+    }
+
+    @Synchronized
+    private fun trySendGreeting() {
+        val channel = eventsChannel ?: return
+        val opening = pendingOpeningQuestion ?: return
+        if (greetingSent || channel.state() != DataChannel.State.OPEN) {
+            return
+        }
+        val spoken = LiveGreeting.spoken(opening)
+        sendLiveEvent(channel, "session.instructions.append", "android_greet_instructions", LiveGreeting.instructions(spoken))
+        sendLiveEvent(channel, "session.commentary.append", "android_greet_commentary", LiveGreeting.commentary(spoken))
+        greetingSent = true
+    }
+
+    private fun sendLiveEvent(channel: DataChannel, type: String, eventId: String, content: String) {
+        val json = JSONObject()
+            .put("type", type)
+            .put("event_id", eventId)
+            .put("delegation_id", JSONObject.NULL)
+            .put("content", content)
+            .toString()
+        val buffer = DataChannel.Buffer(ByteBuffer.wrap(json.toByteArray(StandardCharsets.UTF_8)), false)
+        channel.send(buffer)
     }
 
     private fun routePlaybackLoud() {

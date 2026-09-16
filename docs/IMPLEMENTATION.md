@@ -20,7 +20,7 @@ Handshake volgens de officiële docs (geen Realtime `/v1/realtime/calls`):
 2. Backend `POST https://api.openai.com/v1/live/sessions` met `delegation.type=client` en `transport.type=webrtc`.
 3. Android past `transport.sdp` toe als answer.
 4. Worker `woningtriage:live-gateway` koppelt een sideband op `wss://api.openai.com/v1/live/sessions/{id}/attach`.
-5. Na `session.started` stuurt de worker een begroeting (`session.instructions.append` + `session.commentary.append`) zodat GPT-Live meteen spreekt.
+5. Na attach (de sessie loopt al) stuurt de worker een begroeting: `session.instructions.append`, wacht op `session.instructions.appended`, daarna `session.commentary.append` met de gesproken welkomsttekst. De app stuurt dezelfde groet op `oai-events` zodra het datachannel open is; de worker slaat een dubbele groet over als er al output is.
 6. Bij `session.delegation.created` analyseert de backend het dossier en stuurt `session.commentary.append` met de volgende vraag om hardop te zeggen.
    Sideband-frames worden gelezen via `Message::getContent()` (niet `(string)$message`; dat is de classnaam).
 

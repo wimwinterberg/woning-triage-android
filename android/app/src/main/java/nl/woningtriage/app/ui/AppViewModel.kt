@@ -214,7 +214,10 @@ class AppViewModel(
         val session = api.startVoice(intakeId, UUID.randomUUID().toString(), VoiceStartRequest(offer))
         val answer = session.sdpAnswer
         if (session.live && answer != null && nl.woningtriage.app.voice.Sdp.canApplyAnswer(offer, answer)) {
+            val opening = _state.value.intake?.nextQuestion?.text.orEmpty()
+            voice.requestOpeningGreeting(opening)
             voice.applyRemoteAnswer(answer)
+            voice.requestOpeningGreeting(opening)
             _state.value = _state.value.copy(voiceConnected = true, connectionLabel = "connected", voiceSessionId = session.id)
         } else {
             _state.value = _state.value.copy(

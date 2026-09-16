@@ -6,6 +6,7 @@ namespace App\Command;
 
 use App\Entity\VoiceSession;
 use App\Live\LiveGatewayCommandQueue;
+use App\Live\LiveGreeting;
 use App\Live\SidebandPayload;
 use App\Service\IntakeService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -82,7 +83,7 @@ final class LiveGatewayCommand extends Command
                 $this->queue->ack($voiceSessionId);
                 $this->entityManager->clear();
             }
-            sleep(2);
+            usleep(400_000);
         }
     }
 
@@ -94,22 +95,24 @@ final class LiveGatewayCommand extends Command
         $client->addHeader('OpenAI-Beta', 'live=v1');
         $client->addMiddleware(new CloseHandler());
         $client->addMiddleware(new PingResponder());
-        $client->setTimeout(20);
+        $client->setTimeout(1);
         $this->log($output, 'Connecting sideband '.$session->getId().' provider='.$session->getProviderSessionId());
         $client->connect();
         $this->log($output, 'Attached sideband for '.$session->getId());
         $transcript = '';
         $audioChunks = 0;
-        $greeted = false;
+        $alreadySpeaking = $this->drainUntilOutputOrTimeout($client, $output, $transcript, $audioChunks, 1.5);
+        if ($alreadySpeaking) {
+            $this->log($output, 'Greeting already in progress on '.$session->getId().'; skipping duplicate');
+        } else {
+            $this->requestGreeting($client, $session, $output);
+        }
+        $client->setTimeout(5);
         while ($session->isOpen() || $session->getStatus() === VoiceSession::CLOSING) {
             try {
                 $message = $client->receive();
             } catch (ConnectionTimeoutException) {
                 $this->entityManager->refresh($session);
-                if (!$greeted) {
-                    $this->requestGreeting($client, $session, $output);
-                    $greeted = true;
-                }
                 $this->log($output, 'Waiting on '.$session->getId().' status='.$session->getStatus().' transcript_chars='.mb_strlen($transcript));
                 continue;
             } catch (ConnectionClosedException $exception) {
@@ -122,10 +125,6 @@ final class LiveGatewayCommand extends Command
                 continue;
             }
             $type = (string) ($payload['type'] ?? '');
-            if (!$greeted && in_array($type, ['session.started', 'session.updated'], true)) {
-                $this->requestGreeting($client, $session, $output);
-                $greeted = true;
-            }
             if ($type === 'session.output_audio.delta') {
                 ++$audioChunks;
                 continue;
@@ -213,24 +212,116 @@ final class LiveGatewayCommand extends Command
         $this->log($output, 'commentary sent in '.$ms.'ms question='.$this->clip($next));
     }
 
+    /**
+     * @param-out string $transcript
+     */
+    private function drainUntilOutputOrTimeout(
+        WebSocketClient $client,
+        OutputInterface $output,
+        string &$transcript,
+        int &$audioChunks,
+        float $seconds,
+    ): bool {
+        $deadline = microtime(true) + $seconds;
+        while (microtime(true) < $deadline) {
+            try {
+                $message = $client->receive();
+            } catch (ConnectionTimeoutException) {
+                continue;
+            } catch (ConnectionClosedException $exception) {
+                throw $exception;
+            }
+            $payload = SidebandPayload::decode($message);
+            if ($payload === null) {
+                continue;
+            }
+            $type = (string) ($payload['type'] ?? '');
+            $this->log($output, 'pre-greet event '.$type);
+            if ($type === 'session.output_audio.delta') {
+                ++$audioChunks;
+
+                return true;
+            }
+            if ($type === 'session.output_transcript.delta') {
+                return true;
+            }
+            if (in_array($type, ['session.instructions.appended', 'session.commentary.appended'], true)) {
+                return true;
+            }
+            if ($type === 'session.closed') {
+                $this->log($output, 'session.closed during greeting drain');
+
+                return true;
+            }
+            if ($type === 'session.input_transcript.delta') {
+                $transcript .= (string) ($payload['delta'] ?? '');
+            }
+        }
+
+        return false;
+    }
+
     private function requestGreeting(WebSocketClient $client, VoiceSession $session, OutputInterface $output): void
     {
         $intake = $session->getIntake();
         $this->entityManager->refresh($intake);
-        $opening = $intake->document()->nextQuestion['text'] ?? 'Wat is er aan de hand in uw huurwoning?';
+        $opening = (string) ($intake->document()->nextQuestion['text'] ?? '');
+        $spoken = LiveGreeting::spoken($opening);
+        $instructionId = \App\Domain\IdGenerator::prefixed('evt');
         $this->sendEvent($client, [
             'type' => 'session.instructions.append',
-            'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
+            'event_id' => $instructionId,
             'delegation_id' => null,
-            'content' => 'Spreek nu Nederlands. Begroet meteen, wacht niet tot de bewoner iets zegt. Dit is een huurwoning; vraag nooit of het huur of koop is. Zeg daarna deze vraag en luister: '.$opening,
+            'content' => LiveGreeting::instructions($spoken),
         ]);
+        $acked = $this->awaitClientAck($client, $output, $instructionId, 'session.instructions.appended', 8);
         $this->sendEvent($client, [
             'type' => 'session.commentary.append',
             'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
             'delegation_id' => null,
-            'content' => 'Begin het gesprek nu. Zeg de welkomstvraag hardop.',
+            'content' => LiveGreeting::commentary($spoken),
         ]);
-        $this->log($output, 'Requested greeting: '.$this->clip($opening));
+        $this->log($output, 'Requested greeting ack='.($acked ? 'yes' : 'timeout').' text='.$this->clip($spoken));
+    }
+
+    private function awaitClientAck(
+        WebSocketClient $client,
+        OutputInterface $output,
+        string $eventId,
+        string $expectedType,
+        float $seconds,
+    ): bool {
+        $deadline = microtime(true) + $seconds;
+        $client->setTimeout(1);
+        while (microtime(true) < $deadline) {
+            try {
+                $message = $client->receive();
+            } catch (ConnectionTimeoutException) {
+                continue;
+            }
+            $payload = SidebandPayload::decode($message);
+            if ($payload === null) {
+                continue;
+            }
+            $type = (string) ($payload['type'] ?? '');
+            $clientEventId = (string) ($payload['client_event_id'] ?? $payload['error']['client_event_id'] ?? '');
+            if ($type === $expectedType && $clientEventId === $eventId) {
+                $this->log($output, 'Ack '.$expectedType.' for '.$eventId);
+
+                return true;
+            }
+            if ($type === 'error' && $clientEventId === $eventId) {
+                $this->log($output, 'Greeting rejected: '.$this->clip((string) ($payload['error']['message'] ?? json_encode($payload))));
+
+                return false;
+            }
+            if ($type !== 'session.output_audio.delta') {
+                $this->log($output, 'event '.$type.' while waiting for '.$expectedType);
+            }
+        }
+        $this->log($output, 'No '.$expectedType.' ack for '.$eventId.'; sending commentary anyway');
+
+        return false;
     }
 
     /**
@@ -238,7 +329,7 @@ final class LiveGatewayCommand extends Command
      */
     private function sendEvent(WebSocketClient $client, array $payload): void
     {
-        $client->text(json_encode($payload, JSON_THROW_ON_ERROR));
+        $client->text(json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
     }
 
     private function log(OutputInterface $output, string $message): void
