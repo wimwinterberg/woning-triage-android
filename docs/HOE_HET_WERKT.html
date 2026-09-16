@@ -556,13 +556,11 @@ flowchart TD
     De bewoner moet die tekst bevestigen. Daarna ontstaat één <code>Report</code>.
   </p>
   <div class="note">
-    <strong>Huidige valkuil.</strong> De boomknoop <code>terminal_summary</code> heeft
-    de plaatshouderzin “Ik vat het probleem samen zodat u het kunt controleren.”
-    Die zin is <em>niet</em> de echte samenvatting. Als de backend die plaatshouder
-    doorstuurt in plaats van <code>{resident_text} Klopt dit?</code>, gaat GPT-Live
-    zelf een samenvatting verzinnen. De bewoner zegt “ja”, maar er is geen
-    summary-document, dus er komt geen report. In de logs zie je dan
-    <code>question_id=terminal_summary</code> blijven hangen.
+    <strong>Afronden.</strong> Als de boom op <code>terminal_summary</code> staat,
+    schrijft de backend de echte samenvatting (<code>{tekst} Klopt dit?</code>)
+    en maakt bij <code>ja</code> / <code>klopt</code> / <code>rond af</code> het report.
+    Daarna: <code>De melding is vastgelegd.</code> De plaatshouderzin van de boom
+    mag het gesprek niet laten hangen.
   </div>
 </section>
 
