@@ -43,6 +43,10 @@ final class LiveGatewayCommand extends Command
     {
         if ($this->apiKey() === '') {
             $output->writeln('OPENAI_API_KEY is not set. Gateway idle; text intake still works.');
+            $output->writeln('Set OPENAI_API_KEY in backend/.env and restart: docker compose --profile live up --force-recreate');
+            while (true) {
+                sleep(30);
+            }
         }
 
         $output->writeln('Live gateway waiting for voice sessions. Ctrl+C to stop.');
@@ -50,11 +54,6 @@ final class LiveGatewayCommand extends Command
             foreach ($this->queue->pending() as $voiceSessionId) {
                 $session = $this->entityManager->find(VoiceSession::class, $voiceSessionId);
                 if (!$session instanceof VoiceSession || $session->getProviderSessionId() === null) {
-                    $this->queue->ack($voiceSessionId);
-                    continue;
-                }
-                if ($this->apiKey() === '') {
-                    $output->writeln('Skipping '.$voiceSessionId.' because GPT-Live is not configured.');
                     $this->queue->ack($voiceSessionId);
                     continue;
                 }

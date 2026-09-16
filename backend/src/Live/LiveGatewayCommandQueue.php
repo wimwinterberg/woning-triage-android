@@ -33,10 +33,13 @@ final class LiveGatewayCommandQueue
         /** @var list<string> $ids */
         $ids = $this->entityManager->createQuery(
             'SELECT v.id FROM App\\Entity\\VoiceSession v
-             WHERE v.status IN (:statuses) AND v.providerSessionId IS NOT NULL
+             WHERE v.status IN (:statuses)
+               AND v.providerSessionId IS NOT NULL
+               AND v.providerSessionId NOT LIKE :fakePrefix
              ORDER BY v.createdAt ASC'
         )
             ->setParameter('statuses', [VoiceSession::CONNECTING, VoiceSession::ACTIVE])
+            ->setParameter('fakePrefix', 'prov_fake_%')
             ->getSingleColumnResult();
 
         return $ids;

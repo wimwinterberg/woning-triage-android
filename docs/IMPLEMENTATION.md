@@ -22,7 +22,7 @@ Handshake volgens de officiële docs (geen Realtime `/v1/realtime/calls`):
 4. Worker `woningtriage:live-gateway` koppelt een sideband op `wss://api.openai.com/v1/live/sessions/{id}/attach`.
 5. Bij `session.delegation.created` analyseert de backend het dossier en stuurt `session.commentary.append`.
 
-Zonder `OPENAI_API_KEY` blijft tekstintake werken. Een fake SDP is geen live-bewijs.
+Zonder `OPENAI_API_KEY` blijft tekstintake werken. Een fake SDP is geen live-bewijs; de API zet `live: false` en de app past het antwoord niet toe. `APP_ENV=dev` (Docker) forceert de fake **niet** als de key gezet is. De live-gateway slaat `prov_fake_*`-sessies over en blijft idle zonder skip-spam. Na een nieuwe key: `docker compose --profile live up --force-recreate`.
 
 Gespreksprompt: `App\Live\ConversationPrompt` (versie `conversation-v1`). Analyzer: deterministische heuristic voor CI/demo; geen verzonnen oorzaak.
 
@@ -42,7 +42,7 @@ Classificatiecatalogus: importer `woningtriage:import-classification`. Productie
 
 - `backend/compose.yaml` start `api` (PHP 8.4 built-in server op poort 8000) en PostgreSQL 16.
 - Eerste start: `cd backend && docker compose up --build`. Entrypoint wacht op de database en draait `woningtriage:release`.
-- Live-gateway: `docker compose --profile live up --build`.
+- Live-gateway: `OPENAI_API_KEY` in `backend/.env`, daarna `docker compose --profile live up --force-recreate --build`.
 - Telefoon: `ngrok http 8000`, daarna APK met `-PBACKEND_URL=https://….ngrok-free.app/`. De app zet `ngrok-skip-browser-warning` op die hosts.
 
 ## DigitalOcean App Platform

@@ -38,12 +38,18 @@ services:
             $apiKey: '%env(default::OPENAI_API_KEY)%'
             $model: '%app.live_model%'
 
+    App\Live\GptLiveClient:
+        factory: ['App\Live\GptLiveClientFactory', 'create']
+        arguments:
+            $http: '@App\Live\HttpGptLiveClient'
+            $fake: '@App\Live\FakeGptLiveClient'
+            $apiKey: '%env(default::OPENAI_API_KEY)%'
+
     App\Command\LiveGatewayCommand:
         arguments:
             $apiKey: '%env(default::OPENAI_API_KEY)%'
 
     App\Analyzer\IntakeAnalyzer: '@App\Analyzer\HeuristicIntakeAnalyzer'
-    App\Live\GptLiveClient: '@App\Live\HttpGptLiveClient'
     App\Address\AddressProvider: '@App\Address\PdokAddressProvider'
     App\Address\FakeAddressProvider:
         public: true
@@ -55,5 +61,4 @@ when@test:
 
 when@dev:
     services:
-        App\Live\GptLiveClient: '@App\Live\FakeGptLiveClient'
         App\Address\AddressProvider: '@App\Address\FakeAddressProvider'

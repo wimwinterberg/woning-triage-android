@@ -41,11 +41,13 @@ cd backend
 docker compose exec api php bin/console woningtriage:create-user --label=pilot
 ```
 
-GPT-Live worker (optioneel):
+Spraak (GPT-Live) vereist `OPENAI_API_KEY` in `backend/.env` (Compose leest dat bestand; `.env.local` alleen is niet genoeg). Zonder key blijft **typen** werken. De worker blijft idle en logt geen `Skipping voice_…`. De app past geen fake-SDP toe, zodat WebRTC niet crasht op m-line-volgorde.
+
+Na het zetten of wijzigen van de key containers opnieuw aanmaken:
 
 ```bash
 cd backend
-docker compose --profile live up --build
+docker compose --profile live up --force-recreate --build
 ```
 
 Poort 8000 bezet? `HTTP_PORT=8080 docker compose up --build`.  

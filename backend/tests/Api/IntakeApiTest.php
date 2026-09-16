@@ -230,8 +230,9 @@ final class IntakeApiTest extends WebTestCase
         ], 'voice-1', 201);
         self::assertSame('webrtc', $session['transport']);
         self::assertNotSame('', $session['sdp_answer']);
+        self::assertFalse($session['live']);
         $queue = static::getContainer()->get(\App\Live\LiveGatewayCommandQueue::class);
-        self::assertContains($session['id'], $queue->pending());
+        self::assertNotContains($session['id'], $queue->pending());
 
         $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
             'expected_revision' => 0,

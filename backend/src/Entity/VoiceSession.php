@@ -134,6 +134,7 @@ class VoiceSession
             'transport' => $this->transport,
             'sdp_answer' => $this->sdpAnswer,
             'expires_at' => $this->expiresAt->setTimezone(new \DateTimeZone('UTC'))->format(DATE_ATOM),
+            'live' => $this->providerSessionId !== null && !str_starts_with($this->providerSessionId, 'prov_fake_'),
         ];
     }
 

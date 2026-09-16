@@ -83,7 +83,13 @@ class AppViewModel(
             connectionLabel = if (voiceMode) "connecting" else "disconnected",
         )
         if (voiceMode) {
-            startVoice(intake.id)
+            runCatching { startVoice(intake.id) }.onFailure { error ->
+                _state.value = _state.value.copy(
+                    voiceConnected = false,
+                    connectionLabel = "disconnected",
+                    error = friendlyVoiceError(error),
+                )
+            }
         }
     }
 
@@ -196,8 +202,27 @@ class AppViewModel(
         _state.value = _state.value.copy(connectionLabel = "connecting")
         val offer = voice.prepareOffer()
         val session = api.startVoice(intakeId, UUID.randomUUID().toString(), VoiceStartRequest(offer))
-        session.sdpAnswer?.let { voice.applyRemoteAnswer(it) }
-        _state.value = _state.value.copy(voiceConnected = true, connectionLabel = "connected", voiceSessionId = session.id)
+        val answer = session.sdpAnswer
+        if (session.live && answer != null && nl.woningtriage.app.voice.Sdp.canApplyAnswer(offer, answer)) {
+            voice.applyRemoteAnswer(answer)
+            _state.value = _state.value.copy(voiceConnected = true, connectionLabel = "connected", voiceSessionId = session.id)
+        } else {
+            _state.value = _state.value.copy(
+                voiceConnected = false,
+                connectionLabel = "disconnected",
+                voiceSessionId = session.id,
+                error = "Spraak is niet live verbonden (geen OPENAI_API_KEY). U kunt typen.",
+            )
+        }
+    }
+
+    private fun friendlyVoiceError(error: Throwable): String {
+        val message = error.message.orEmpty()
+        return if (message.contains("m-lines", ignoreCase = true) || message.contains("SDP", ignoreCase = true)) {
+            "Spraakverbinding mislukt. Zet OPENAI_API_KEY in backend/.env of typ uw antwoord."
+        } else {
+            message.ifBlank { "Spraakverbinding mislukt. U kunt typen." }
+        }
     }
 
     private suspend fun refresh(id: String) {
