@@ -168,6 +168,20 @@ final class WcsAddressProviderTest extends TestCase
         self::assertNull($candidates[0]->addition);
     }
 
+    public function testAcceptsASingleAddressObjectPayload(): void
+    {
+        $candidates = (new WcsAddressProvider($this->httpReturning(200, [
+            'country' => 'nl',
+            'postalCode' => '3573 SJ',
+            'houseNumber' => 207,
+            'street' => 'Oldenburgerstraat',
+            'city' => 'Utrecht',
+        ]), 'test-key'))->lookup('3573 SJ', 207, null);
+
+        self::assertCount(1, $candidates);
+        self::assertSame('Oldenburgerstraat', $candidates[0]->street);
+    }
+
     public function testLogsLookupOutcomeWithoutAddressPii(): void
     {
         $records = [];

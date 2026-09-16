@@ -9,7 +9,8 @@ use Psr\Log\NullLogger;
 
 /**
  * Operational address-lookup logs without address PII.
- * Writes to STDERR so `docker compose logs -f api live-gateway` shows them.
+ * Writes to STDOUT and STDERR so `docker compose logs -f live-gateway` shows them
+ * on the same stream as commentary lines.
  */
 final class AddressLookupLogger
 {
@@ -39,12 +40,16 @@ final class AddressLookupLogger
         foreach ($safe as $key => $value) {
             $parts[] = $key.'='.$this->format($value);
         }
-        fwrite(STDERR, sprintf(
+        $line = sprintf(
             "[%s] Address lookup %s%s\n",
             gmdate('Y-m-d H:i:s'),
             $event,
             $parts === [] ? '' : ' '.implode(' ', $parts),
-        ));
+        );
+        fwrite(STDOUT, $line);
+        fwrite(STDERR, $line);
+        fflush(STDOUT);
+        fflush(STDERR);
     }
 
     /**

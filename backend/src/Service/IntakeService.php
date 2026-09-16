@@ -606,7 +606,7 @@ final class IntakeService
         $postcode = is_string($address['postcode'] ?? null) ? trim((string) $address['postcode']) : '';
         $houseNumber = $address['house_number'] ?? null;
         $hasNumber = is_int($houseNumber) ? $houseNumber > 0 : (is_numeric($houseNumber) && (int) $houseNumber > 0);
-        $candidates = $address['candidates'] ?? [];
+        $candidates = $this->candidateList($address['candidates'] ?? []);
         $lookupId = $address['lookup_id'] ?? null;
         $lookedUp = is_string($lookupId) && $lookupId !== '';
 
@@ -739,6 +739,7 @@ final class IntakeService
             'provider' => $this->addressProvider::class,
             'has_postcode' => $postcode !== null,
             'has_house_number' => $number !== null,
+            'house_number_digits' => $number !== null ? strlen((string) $number) : 0,
             'has_addition' => $addition !== null,
             'has_street' => is_string($hint['street'] ?? null) && trim((string) $hint['street']) !== '',
             'unique_claim' => (bool) ($hint['unique_claim'] ?? false),
@@ -863,6 +864,31 @@ final class IntakeService
         }
 
         return $matched;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function candidateList(mixed $candidates): array
+    {
+        if (!is_array($candidates) || $candidates === []) {
+            return [];
+        }
+        if (array_is_list($candidates)) {
+            $list = [];
+            foreach ($candidates as $candidate) {
+                if (is_array($candidate)) {
+                    $list[] = $candidate;
+                }
+            }
+
+            return $list;
+        }
+        if (isset($candidates['candidate_id']) || isset($candidates['display_address'])) {
+            return [$candidates];
+        }
+
+        return [];
     }
 
     private function streetsMatch(string $spoken, string $candidate): bool
