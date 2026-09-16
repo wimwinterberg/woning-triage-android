@@ -20,11 +20,40 @@ Een zelfstandige Android-app die bewoners via een gesproken of getypt gesprek he
 
 ## Vereisten
 
-- PHP 8.4, Composer, PostgreSQL 16
+- PHP 8.4, Composer, PostgreSQL 16 **of** Docker Compose
 - JDK 17, Android SDK (compileSdk 35) voor de app
 - Optioneel: `OPENAI_API_KEY` met GPT-Live-toegang
 
-## Backend starten
+## Backend starten met Docker
+
+```bash
+cd backend
+cp -n .env.example .env
+docker compose up --build
+```
+
+De API luistert op http://127.0.0.1:8000 (`GET /health` moet `{"status":"ok"}` teruggeven).
+
+In een tweede terminal:
+
+```bash
+cd backend
+docker compose exec api php bin/console woningtriage:create-user --label=pilot
+```
+
+GPT-Live worker (optioneel):
+
+```bash
+cd backend
+docker compose --profile live up --build
+```
+
+Poort 8000 bezet? `HTTP_PORT=8080 docker compose up --build`.  
+Postgres is alleen bereikbaar in het Docker-netwerk (niet op localhost:5432), zodat een lokale PostgreSQL niet botst. Inspecteren: `docker compose exec database psql -U woningtriage`.
+
+Stoppen: `docker compose down`. Data blijft in het volume `database_data`.
+
+## Backend starten zonder Docker
 
 ```bash
 cd backend

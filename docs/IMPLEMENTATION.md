@@ -38,6 +38,12 @@ Providerinterface met:
 Conversatieboom: `backend/config/trees/demo-ledo-1.json` (LEDO + adres + samenvatting).  
 Classificatiecatalogus: importer `woningtriage:import-classification`. Productiebestand `beslisboom-prod.json` (53.115.659 bytes, SHA-256 `4ba8f60d9b2072d05ffa03e7796b0be7fefd2b4a7f9a23d3a0565f99af6d901c`) ontbreekt in deze repository. Er is een kleine fixture `backend/fixtures/classification/demo-catalog.json`. `planning_duration` wordt hoogstens als bronmetadata bewaard en nooit in API, prompt of report gezet.
 
+## Docker (lokaal)
+
+- `backend/compose.yaml` start `api` (PHP 8.4 built-in server op poort 8000) en PostgreSQL 16.
+- Eerste start: `cd backend && docker compose up --build`. Entrypoint wacht op de database en draait `woningtriage:release`.
+- Live-gateway: `docker compose --profile live up --build`.
+
 ## DigitalOcean App Platform
 
 - PHP-buildpack (heroku-buildpack-php): `backend/Procfile` start `heroku-php-nginx -C nginx_app.conf public/`.

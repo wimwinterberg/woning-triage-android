@@ -1,25 +1,82 @@
-
 services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${HTTP_PORT:-8000}:8000"
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      APP_DEBUG: ${APP_DEBUG:-1}
+      APP_SECRET: ${APP_SECRET:-change-me}
+      DEFAULT_URI: http://localhost:8000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-woningtriage}:${POSTGRES_PASSWORD:-woningtriage}@database:5432/${POSTGRES_DB:-woningtriage}?serverVersion=16&charset=utf8
+      CORS_ALLOW_ORIGIN: "^https?://(localhost|127\\.0\\.0\\.1)(:[0-9]+)?$$"
+      ADDRESS_PROVIDER: ${ADDRESS_PROVIDER:-fake}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_LIVE_MODEL: ${OPENAI_LIVE_MODEL:-gpt-live-1}
+      MESSENGER_TRANSPORT_DSN: doctrine://default?auto_setup=0
+    volumes:
+      - ./:/app
+      - composer_cache:/root/.composer/cache
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "php",
+          "-r",
+          "exit(str_contains((string) @file_get_contents('http://127.0.0.1:8000/health'), '\"status\":\"ok\"') ? 0 : 1);",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 45s
+
+  live-gateway:
+    profiles: ["live"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      APP_DEBUG: ${APP_DEBUG:-1}
+      APP_SECRET: ${APP_SECRET:-change-me}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-woningtriage}:${POSTGRES_PASSWORD:-woningtriage}@database:5432/${POSTGRES_DB:-woningtriage}?serverVersion=16&charset=utf8
+      ADDRESS_PROVIDER: ${ADDRESS_PROVIDER:-fake}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_LIVE_MODEL: ${OPENAI_LIVE_MODEL:-gpt-live-1}
+      SKIP_RELEASE: "1"
+    volumes:
+      - ./:/app
+      - composer_cache:/root/.composer/cache
+    command: php bin/console woningtriage:live-gateway
+    depends_on:
+      database:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
 ###> doctrine/doctrine-bundle ###
   database:
     image: postgres:${POSTGRES_VERSION:-16}-alpine
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-app}
-      # You should definitely change the password in production
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-!ChangeMe!}
-      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-woningtriage}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-woningtriage}
+      POSTGRES_USER: ${POSTGRES_USER:-woningtriage}
     healthcheck:
-      test: ["CMD", "pg_isready", "-d", "${POSTGRES_DB:-app}", "-U", "${POSTGRES_USER:-app}"]
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
       timeout: 5s
       retries: 5
-      start_period: 60s
+      start_period: 10s
     volumes:
       - database_data:/var/lib/postgresql/data:rw
-      # You may use a bind-mounted host directory instead, so that it is harder to accidentally remove the volume and lose all your data!
-      # - ./docker/db/data:/var/lib/postgresql/data:rw
 ###< doctrine/doctrine-bundle ###
 
 volumes:
+  composer_cache:
 ###> doctrine/doctrine-bundle ###
   database_data:
 ###< doctrine/doctrine-bundle ###
