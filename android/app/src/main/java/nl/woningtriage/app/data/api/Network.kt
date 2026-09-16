@@ -9,6 +9,7 @@ import nl.woningtriage.app.BuildConfig
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import java.util.concurrent.TimeUnit
@@ -46,12 +47,26 @@ fun createApi(tokenStore: TokenStore): WoningtriageApi {
         }
         chain.proceed(builder.build())
     }
+    val firstJson = Interceptor { chain ->
+        val response = chain.proceed(chain.request())
+        val body = response.body ?: return@Interceptor response
+        val media = body.contentType()
+        if (media?.subtype != "json") {
+            return@Interceptor response
+        }
+        val raw = body.string()
+        val trimmed = firstJsonDocument(raw)
+        response.newBuilder()
+            .body(trimmed.toResponseBody(media))
+            .build()
+    }
     val logging = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BASIC
         redactHeader("Authorization")
     }
     val client = OkHttpClient.Builder()
         .addInterceptor(auth)
+        .addInterceptor(firstJson)
         .addInterceptor(logging)
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(40, TimeUnit.SECONDS)
@@ -66,3 +81,42 @@ fun createApi(tokenStore: TokenStore): WoningtriageApi {
 
 internal fun isNgrokHost(host: String): Boolean =
     host.contains("ngrok", ignoreCase = true)
+
+internal fun firstJsonDocument(raw: String): String {
+    val start = raw.indexOfFirst { !it.isWhitespace() }
+    if (start < 0) {
+        return raw
+    }
+    val open = raw[start]
+    if (open != '{' && open != '[') {
+        return raw
+    }
+    val close = if (open == '{') '}' else ']'
+    var depth = 0
+    var inString = false
+    var escape = false
+    for (i in start until raw.length) {
+        val c = raw[i]
+        if (inString) {
+            if (escape) {
+                escape = false
+            } else if (c == '\\') {
+                escape = true
+            } else if (c == '"') {
+                inString = false
+            }
+            continue
+        }
+        when (c) {
+            '"' -> inString = true
+            open -> depth++
+            close -> {
+                depth--
+                if (depth == 0) {
+                    return raw.substring(start, i + 1)
+                }
+            }
+        }
+    }
+    return raw
+}

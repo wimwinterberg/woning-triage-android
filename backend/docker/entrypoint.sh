@@ -11,10 +11,10 @@ if [ ! -f vendor/autoload.php ] || [ "${COMPOSER_INSTALL:-0}" = "1" ]; then
     fi
 fi
 
-# Bind-mounted ./:/app keeps host var/cache across image rebuilds. Prod dumps are
-# not invalidated when constructors or classes change (PdokAddressProvider,
-# LiveGatewayCommand $apiKey vs WcsAddressProvider).
+# This script is invoked from the bind-mount (/app/docker/entrypoint.sh), not
+# the image copy, so git pull + recreate is enough (no --build required).
 cache_env="${APP_ENV:-dev}"
+echo "WONINGTRIAGE_ENTRYPOINT=2 APP_ENV=${cache_env}"
 echo "Resetting Symfony cache (${cache_env})..."
 rm -rf var/cache/dev var/cache/prod var/cache/test
 mkdir -p var/cache var/log var/share
