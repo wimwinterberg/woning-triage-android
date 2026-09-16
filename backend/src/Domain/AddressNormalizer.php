@@ -66,4 +66,37 @@ final class AddressNormalizer
 
         return $trimmed;
     }
+
+    public function normalizeLatitude(mixed $value): float
+    {
+        return $this->normalizeCoordinate($value, -90.0, 90.0, 'Ongeldige breedtegraad.');
+    }
+
+    public function normalizeLongitude(mixed $value): float
+    {
+        return $this->normalizeCoordinate($value, -180.0, 180.0, 'Ongeldige lengtegraad.');
+    }
+
+    public function assertInTheNetherlands(float $latitude, float $longitude): void
+    {
+        if ($latitude < 50.75 || $latitude > 53.58 || $longitude < 3.20 || $longitude > 7.23) {
+            throw new \InvalidArgumentException('De locatie ligt niet in Nederland.');
+        }
+    }
+
+    private function normalizeCoordinate(mixed $value, float $min, float $max, string $message): float
+    {
+        if (!is_int($value) && !is_float($value) && !is_string($value)) {
+            throw new \InvalidArgumentException($message);
+        }
+        if (is_string($value) && !is_numeric($value)) {
+            throw new \InvalidArgumentException($message);
+        }
+        $float = (float) $value;
+        if (!is_finite($float) || $float < $min || $float > $max) {
+            throw new \InvalidArgumentException($message);
+        }
+
+        return $float;
+    }
 }

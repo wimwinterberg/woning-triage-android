@@ -175,9 +175,9 @@ Zie [ACCEPTANCE.md](ACCEPTANCE.md) voor de controleerbare scenario's en nog niet
 
 ## 11. Adres verzamelen en verifiëren
 
-Voeg vóór de eindcontrole een adresstap toe, via gesprek of invoervelden. Verzamel postcode en huisnummer, vraag een toevoeging alleen waar nodig. Ondersteun dat een bewoner adresgegevens al tijdens de probleembeschrijving noemt. De backend zoekt op; het model verzint geen straat of woonplaats.
+Voeg vóór de eindcontrole een adresstap toe, via gesprek, GPS of invoervelden. Verzamel postcode en huisnummer, of vraag de GPS-locatie (`Gebruik mijn locatie`). Vraag een toevoeging alleen waar nodig. Ondersteun dat een bewoner adresgegevens al tijdens de probleembeschrijving noemt. De backend zoekt op; het model verzint geen straat of woonplaats.
 
-Toon het volledige gevonden adres en laat de agent dit in de gesprekstaal ter controle voorleggen. Een expliciete gesproken bevestiging of knop bevestigt precies de getoonde kandidaat. Bij meerdere adressen vraagt de app om de toevoeging of laat ze kandidaten kiezen. Bij nul resultaten corrigeert de bewoner de invoer. Bij storing blijft de intake bewaard, maar wordt geen geverifieerd adres gesuggereerd.
+Toon het volledige gevonden adres en laat de agent dit in de gesprekstaal ter controle voorleggen. Een expliciete gesproken bevestiging of knop bevestigt precies de getoonde kandidaat. Bij meerdere adressen (GPS in de buurt of meerdere units) toont de app de lijst en laat de bewoner kiezen; nooit automatisch het eerste resultaat. Bij nul resultaten corrigeert de bewoner de invoer of probeert GPS opnieuw. Bij storing blijft de intake bewaard, maar wordt geen geverifieerd adres gesuggereerd.
 
 Een wijziging van postcode, huisnummer, toevoeging of kandidaat trekt de eerdere adresverificatie en samenvatting in. Eindcontrole toont probleem én adres. Als alles is gecontroleerd, roept de app de afrondingsroute aan. Bij timeout controleert zij de status en herhaalt zo nodig met dezelfde idempotentiesleutel. Nooit een succesmelding uitsluitend op basis van uitgesproken modeltekst.
 

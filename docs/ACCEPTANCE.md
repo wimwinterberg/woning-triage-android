@@ -121,5 +121,6 @@ Bij iedere gate wordt vastgelegd: build/commit, configuratieversies, datum, uitg
 | AD-11 | Inhoudelijke correctie tijdens afronden | Oude revisie geweigerd; juiste samenvatting opnieuw beoordelen |
 | AD-12 | Een latere lookup arriveert na gewijzigde adresinvoer | Verouderd resultaat niet toepassen |
 | AD-13 | Reportdetails controleren | Geordende berichten, correcties, LEDO en verificatiebewijs behouden; geen verzonnen ontbrekende transcripttekst |
+| AD-14 | GPS lat/lon met meerdere nabije adressen | App vraagt locatie; backend toont kandidaten; bewoner kiest; geen automatische verificatie |
 
 REQ-09 wordt gedekt door AT-19 en AD-07; REQ-10 door AD-01 t/m AD-06/AD-12; REQ-11 door AD-07 t/m AD-09/AD-11/AD-13; REQ-12 door AD-10. Deze tests zijn gepland, niet uitgevoerd.

@@ -169,9 +169,7 @@ final class IntakeController extends AbstractController
         $result = $this->intakeService->lookupAddress(
             $intake,
             $this->intValue($body, 'expected_revision'),
-            (string) ($body['postcode'] ?? ''),
-            $body['house_number'] ?? 0,
-            array_key_exists('addition', $body) ? ($body['addition'] !== null ? (string) $body['addition'] : null) : null,
+            $body,
         );
         $this->idempotency->store($user->getId(), $id, 'address_lookup', $key, $body, 200, $result);
 

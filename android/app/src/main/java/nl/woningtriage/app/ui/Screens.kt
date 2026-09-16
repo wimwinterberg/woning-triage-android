@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
@@ -37,6 +38,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -47,6 +49,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import nl.woningtriage.app.R
 import nl.woningtriage.app.domain.Intake
+import nl.woningtriage.app.location.DeviceAddressLocator
 
 @Composable
 fun WoningtriageRoot(viewModel: AppViewModel) {
@@ -137,6 +140,7 @@ private fun ConversationScreen(state: AppUiState, viewModel: AppViewModel) {
             Transcript(state.transcript)
             LedoCard(state.intake, onField = viewModel::openField)
             AddressCandidatesCard(state.intake, onVerify = viewModel::verifyCandidate)
+            UseMyLocationButton(state, viewModel)
             OutlinedButton(onClick = viewModel::goAddress) { Text(stringResource(R.string.lookup_address)) }
         }
         if (tablet) {
@@ -151,14 +155,22 @@ private fun ConversationScreen(state: AppUiState, viewModel: AppViewModel) {
 
 @Composable
 private fun AddressScreen(state: AppUiState, viewModel: AppViewModel) {
+    val candidates = state.intake?.address?.candidates.orEmpty()
     ScreenScaffold(stringResource(R.string.lookup_address), state.error) {
+        UseMyLocationButton(state, viewModel)
+        Text(stringResource(R.string.or_type_address), style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(state.postcode, viewModel::onPostcode, label = { Text(stringResource(R.string.postcode)) }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(state.houseNumber, viewModel::onHouseNumber, label = { Text(stringResource(R.string.house_number)) }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(state.addition, viewModel::onAddition, label = { Text(stringResource(R.string.addition)) }, modifier = Modifier.fillMaxWidth())
         Button(onClick = viewModel::lookupAddress, enabled = !state.busy, modifier = Modifier.fillMaxWidth().height(48.dp)) {
             Text(stringResource(R.string.lookup_address))
         }
-        state.intake?.address?.candidates.orEmpty().forEach { candidate ->
+        if (candidates.size > 1) {
+            Text(stringResource(R.string.several_addresses), style = MaterialTheme.typography.titleMedium)
+        } else if (candidates.size == 1) {
+            Text(stringResource(R.string.pick_address), style = MaterialTheme.typography.titleMedium)
+        }
+        candidates.forEach { candidate ->
             Card(Modifier.fillMaxWidth().clickable { viewModel.verifyCandidate(candidate.candidateId) }) {
                 Column(Modifier.padding(16.dp)) {
                     Text(candidate.displayAddress, style = MaterialTheme.typography.titleMedium)
@@ -270,6 +282,11 @@ private fun AddressCandidatesCard(intake: Intake?, onVerify: (String) -> Unit) {
         return
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (candidates.size > 1) {
+            Text(stringResource(R.string.several_addresses), style = MaterialTheme.typography.titleMedium)
+        } else {
+            Text(stringResource(R.string.pick_address), style = MaterialTheme.typography.titleMedium)
+        }
         candidates.forEach { candidate ->
             Card(Modifier.fillMaxWidth().clickable { onVerify(candidate.candidateId) }) {
                 Column(Modifier.padding(12.dp)) {
@@ -278,6 +295,35 @@ private fun AddressCandidatesCard(intake: Intake?, onVerify: (String) -> Unit) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun UseMyLocationButton(state: AppUiState, viewModel: AppViewModel) {
+    val context = LocalContext.current
+    val locator = remember(context) { DeviceAddressLocator(context.applicationContext) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        if (grants[Manifest.permission.ACCESS_FINE_LOCATION] == true || grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
+            viewModel.lookupFromGps(locator)
+        } else {
+            viewModel.locationDenied()
+        }
+    }
+    Button(
+        onClick = {
+            if (locator.hasPermission()) {
+                viewModel.lookupFromGps(locator)
+            } else {
+                launcher.launch(
+                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                )
+            }
+        },
+        enabled = !state.busy,
+        modifier = Modifier.fillMaxWidth().height(48.dp),
+    ) {
+        Icon(Icons.Default.MyLocation, contentDescription = null)
+        Text(stringResource(R.string.use_my_location))
     }
 }
 

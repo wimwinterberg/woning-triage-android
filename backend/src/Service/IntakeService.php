@@ -285,31 +285,52 @@ final class IntakeService
     }
 
     /**
+     * @param array<string, mixed> $request
      * @return array<string, mixed>
      */
-    public function lookupAddress(Intake $intake, int $expectedRevision, string $postcode, int|string $houseNumber, ?string $addition): array
+    public function lookupAddress(Intake $intake, int $expectedRevision, array $request): array
     {
         $this->assertMutable($intake);
         $intake->assertExpectedRevision($expectedRevision);
+        $gps = $this->isGpsLookup($request);
+        $nearbyHintCount = 0;
+
         try {
-            $normalizedPostcode = $this->addressNormalizer->normalizePostcode($postcode);
-            $normalizedNumber = $this->addressNormalizer->normalizeHouseNumber($houseNumber);
-            $normalizedAddition = $this->addressNormalizer->normalizeAddition($addition);
+            if ($gps) {
+                $this->addressNormalizer->assertInTheNetherlands(
+                    $this->addressNormalizer->normalizeLatitude($request['latitude'] ?? null),
+                    $this->addressNormalizer->normalizeLongitude($request['longitude'] ?? null),
+                );
+                $hints = $this->nearbyHints($request['nearby'] ?? []);
+                $nearbyHintCount = count($hints);
+                $candidates = $this->lookupNearbyCandidates($hints);
+                $normalizedPostcode = null;
+                $normalizedNumber = null;
+                $normalizedAddition = null;
+                $source = 'gps';
+            } else {
+                $normalizedPostcode = $this->addressNormalizer->normalizePostcode((string) ($request['postcode'] ?? ''));
+                $normalizedNumber = $this->addressNormalizer->normalizeHouseNumber($request['house_number'] ?? 0);
+                $normalizedAddition = $this->addressNormalizer->normalizeAddition(
+                    array_key_exists('addition', $request) && $request['addition'] !== null
+                        ? (string) $request['addition']
+                        : null,
+                );
+                $candidates = $this->lookupCandidates($normalizedPostcode, $normalizedNumber, $normalizedAddition);
+                $source = 'postcode';
+            }
         } catch (\InvalidArgumentException $exception) {
             throw new ValidationFailedException($exception->getMessage());
         }
 
-        $candidates = array_map(
-            static fn ($candidate): array => $candidate->toArray(),
-            $this->addressProvider->lookup($normalizedPostcode, $normalizedNumber, $normalizedAddition),
-        );
         $lookupId = IdGenerator::prefixed('lookup');
         $this->addressLookupLogger->log('intake_stored', [
             'intake_id' => $intake->getId(),
-            'source' => 'ui',
+            'source' => $gps ? 'gps' : 'ui',
             'provider' => $this->addressProvider::class,
             'candidate_count' => count($candidates),
             'has_addition_filter' => $normalizedAddition !== null,
+            'nearby_hint_count' => $nearbyHintCount,
         ]);
         $document = $intake->document();
         $document->recordAddressInput([
@@ -320,6 +341,7 @@ final class IntakeService
             'candidates' => $candidates,
             'lookup_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format(DATE_ATOM),
             'provider' => 'configured',
+            'source' => $source,
         ]);
         $this->prepareAddressFollowUp($document, $intake->getConversationLanguage());
         $intake->replaceDocument($document);
@@ -618,6 +640,63 @@ final class IntakeService
         $candidates = $this->candidateList($address['candidates'] ?? []);
         $lookupId = $address['lookup_id'] ?? null;
         $lookedUp = is_string($lookupId) && $lookupId !== '';
+        $gps = ($address['source'] ?? '') === 'gps';
+
+        if ($lookedUp && $candidates !== []) {
+            if (count($candidates) === 1) {
+                $display = $candidates[0]['display_address'] ?? '';
+                $questionId = 'address_confirm_'.$candidates[0]['candidate_id'];
+                $document->pendingAddressQuestionId = $questionId;
+                $document->nextQuestion = [
+                    'id' => $questionId,
+                    'target' => 'address',
+                    'text' => $nl
+                        ? 'Is dit uw adres: '.$display.'?'
+                        : 'Is this your address: '.$display.'?',
+                ];
+                $this->addressLookupLogger->log('follow_up', [
+                    'question_id' => 'address_confirm',
+                    'candidate_count' => 1,
+                    'source' => $gps ? 'gps' : 'postcode',
+                ]);
+
+                return;
+            }
+            $document->pendingAddressQuestionId = null;
+            $sameHouse = $this->candidatesShareHouse($candidates);
+            $document->nextQuestion = [
+                'id' => 'address_select',
+                'target' => 'address',
+                'text' => $this->addressSelectPrompt($nl, $gps, $sameHouse),
+            ];
+            $this->addressLookupLogger->log('follow_up', [
+                'question_id' => 'address_select',
+                'candidate_count' => count($candidates),
+                'source' => $gps ? 'gps' : 'postcode',
+            ]);
+
+            return;
+        }
+        if ($lookedUp && $candidates === []) {
+            $document->nextQuestion = [
+                'id' => 'address_no_match',
+                'target' => 'address',
+                'text' => $gps
+                    ? ($nl
+                        ? 'Er is geen adres gevonden bij uw locatie. Controleer de lijst of vul postcode en huisnummer in.'
+                        : 'No address was found for your location. Check the list or enter the postcode and house number.')
+                    : ($nl
+                        ? 'Er is geen adres gevonden. Controleer postcode, huisnummer en eventuele toevoeging.'
+                        : 'No address was found. Please check the postcode, house number and any addition.'),
+            ];
+            $this->addressLookupLogger->log('follow_up', [
+                'question_id' => 'address_no_match',
+                'candidate_count' => 0,
+                'source' => $gps ? 'gps' : 'postcode',
+            ]);
+
+            return;
+        }
 
         if ($postcode !== '' && !$hasNumber) {
             $document->nextQuestion = [
@@ -644,62 +723,13 @@ final class IntakeService
         if ($postcode === '' || !$hasNumber) {
             return;
         }
-        if (!$lookedUp) {
-            $document->nextQuestion = [
-                'id' => 'address_lookup_unavailable',
-                'target' => 'address',
-                'text' => $nl
-                    ? 'Het adres kon even niet worden opgezocht. Zeg de postcode en het huisnummer nog eens.'
-                    : 'The address could not be looked up just now. Please say the postcode and house number again.',
-            ];
-
-            return;
-        }
-        if ($candidates === []) {
-            $document->nextQuestion = [
-                'id' => 'address_no_match',
-                'target' => 'address',
-                'text' => $nl
-                    ? 'Er is geen adres gevonden. Controleer postcode, huisnummer en eventuele toevoeging.'
-                    : 'No address was found. Please check the postcode, house number and any addition.',
-            ];
-            $this->addressLookupLogger->log('follow_up', [
-                'question_id' => 'address_no_match',
-                'candidate_count' => 0,
-            ]);
-
-            return;
-        }
-        if (count($candidates) === 1) {
-            $display = $candidates[0]['display_address'] ?? '';
-            $questionId = 'address_confirm_'.$candidates[0]['candidate_id'];
-            $document->pendingAddressQuestionId = $questionId;
-            $document->nextQuestion = [
-                'id' => $questionId,
-                'target' => 'address',
-                'text' => $nl
-                    ? 'Is dit uw adres: '.$display.'?'
-                    : 'Is this your address: '.$display.'?',
-            ];
-            $this->addressLookupLogger->log('follow_up', [
-                'question_id' => 'address_confirm',
-                'candidate_count' => 1,
-            ]);
-
-            return;
-        }
-        $document->pendingAddressQuestionId = null;
         $document->nextQuestion = [
-            'id' => 'address_select',
+            'id' => 'address_lookup_unavailable',
             'target' => 'address',
             'text' => $nl
-                ? 'Er zijn meerdere adressen gevonden. Kies de juiste toevoeging.'
-                : 'Several addresses were found. Please choose the correct addition.',
+                ? 'Het adres kon even niet worden opgezocht. Zeg de postcode en het huisnummer nog eens.'
+                : 'The address could not be looked up just now. Please say the postcode and house number again.',
         ];
-        $this->addressLookupLogger->log('follow_up', [
-            'question_id' => 'address_select',
-            'candidate_count' => count($candidates),
-        ]);
     }
 
     /**
@@ -905,6 +935,136 @@ final class IntakeService
         }
 
         return $unique;
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     */
+    private function isGpsLookup(array $request): bool
+    {
+        return array_key_exists('latitude', $request) || array_key_exists('longitude', $request);
+    }
+
+    /**
+     * @return list<array{postcode: string, house_number: int, addition: ?string}>
+     */
+    private function nearbyHints(mixed $nearby): array
+    {
+        if (!is_array($nearby)) {
+            return [];
+        }
+        $hints = [];
+        $seen = [];
+        foreach ($nearby as $item) {
+            if (count($hints) >= 8) {
+                break;
+            }
+            if (!is_array($item)) {
+                continue;
+            }
+            try {
+                $postcode = $this->addressNormalizer->normalizePostcode((string) ($item['postcode'] ?? ''));
+                $houseNumber = $this->addressNormalizer->normalizeHouseNumber($item['house_number'] ?? 0);
+                $addition = $this->addressNormalizer->normalizeAddition(
+                    array_key_exists('addition', $item) && $item['addition'] !== null
+                        ? (string) $item['addition']
+                        : null,
+                );
+            } catch (\InvalidArgumentException) {
+                continue;
+            }
+            $key = AddressNormalizer::compactPostcode($postcode).':'.$houseNumber.':'.strtolower((string) $addition);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $hints[] = [
+                'postcode' => $postcode,
+                'house_number' => $houseNumber,
+                'addition' => $addition,
+            ];
+        }
+
+        return $hints;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function lookupCandidates(string $postcode, int $houseNumber, ?string $addition): array
+    {
+        return array_map(
+            static fn ($candidate): array => $candidate->toArray(),
+            $this->addressProvider->lookup($postcode, $houseNumber, $addition),
+        );
+    }
+
+    /**
+     * @param list<array{postcode: string, house_number: int, addition: ?string}> $hints
+     * @return list<array<string, mixed>>
+     */
+    private function lookupNearbyCandidates(array $hints): array
+    {
+        $merged = [];
+        $seen = [];
+        foreach ($hints as $hint) {
+            foreach ($this->lookupCandidates($hint['postcode'], $hint['house_number'], $hint['addition']) as $candidate) {
+                $key = strtolower(trim((string) ($candidate['provider_id'] ?? $candidate['display_address'] ?? '')));
+                if ($key === '') {
+                    $key = implode(':', [
+                        AddressNormalizer::compactPostcode((string) ($candidate['postcode'] ?? '')),
+                        (string) ($candidate['house_number'] ?? ''),
+                        strtolower(trim((string) ($candidate['addition'] ?? ''))),
+                    ]);
+                }
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $merged[] = $candidate;
+                if (count($merged) >= 12) {
+                    return $merged;
+                }
+            }
+        }
+
+        return $merged;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $candidates
+     */
+    private function candidatesShareHouse(array $candidates): bool
+    {
+        $postcode = null;
+        $number = null;
+        foreach ($candidates as $candidate) {
+            $itemPostcode = AddressNormalizer::compactPostcode((string) ($candidate['postcode'] ?? ''));
+            $itemNumber = (int) ($candidate['house_number'] ?? 0);
+            if ($postcode === null) {
+                $postcode = $itemPostcode;
+                $number = $itemNumber;
+                continue;
+            }
+            if ($itemPostcode !== $postcode || $itemNumber !== $number) {
+                return false;
+            }
+        }
+
+        return $candidates !== [];
+    }
+
+    private function addressSelectPrompt(bool $nl, bool $gps, bool $sameHouse): string
+    {
+        if ($gps || !$sameHouse) {
+            return $nl
+                ? 'Er zijn meerdere adressen gevonden. Kies het juiste adres in de lijst.'
+                : 'Several addresses were found. Choose the correct address from the list.';
+        }
+
+        return $nl
+            ? 'Er zijn meerdere adressen gevonden. Kies de juiste toevoeging.'
+            : 'Several addresses were found. Please choose the correct addition.';
     }
 
     /**

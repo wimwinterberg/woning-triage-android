@@ -43,6 +43,10 @@
     <string name="house_number">House number</string>
     <string name="addition">Addition</string>
     <string name="lookup_address">Look up address</string>
+    <string name="use_my_location">Use my location</string>
+    <string name="pick_address">Choose your address</string>
+    <string name="several_addresses">Several addresses were found. Tap the correct address. The address is only stored after you choose.</string>
+    <string name="or_type_address">Or enter postcode and house number</string>
     <string name="dependent_review">Because of this change we will review some details again.</string>
     <string name="demo_no_staff">No staff member has been contacted. This is a demo.</string>
     <string name="mic_denied">Microphone permission denied. You can type instead.</string>

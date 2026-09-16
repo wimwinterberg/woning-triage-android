@@ -117,11 +117,19 @@ interface WoningtriageApi {
     @SerialName("summary_id") val summaryId: String,
     @SerialName("confirmation_channel") val confirmationChannel: String = "ui",
 )
-@Serializable data class AddressLookupRequest(
-    @SerialName("expected_revision") val expectedRevision: Int,
+@Serializable data class NearbyAddressHint(
     val postcode: String,
     @SerialName("house_number") val houseNumber: Int,
     val addition: String? = null,
+)
+@Serializable data class AddressLookupRequest(
+    @SerialName("expected_revision") val expectedRevision: Int,
+    val postcode: String? = null,
+    @SerialName("house_number") val houseNumber: Int? = null,
+    val addition: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val nearby: List<NearbyAddressHint> = emptyList(),
 )
 @Serializable data class AddressLookupResponse(
     @SerialName("lookup_id") val lookupId: String,

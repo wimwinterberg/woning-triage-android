@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import nl.woningtriage.app.data.api.AddressLookupRequest
 import nl.woningtriage.app.data.api.AddressVerifyRequest
+import nl.woningtriage.app.location.DeviceAddressLocator
 import nl.woningtriage.app.data.api.ConfirmationRequest
 import nl.woningtriage.app.data.api.CreateIntakeRequest
 import nl.woningtriage.app.data.api.FieldChange
@@ -144,7 +145,40 @@ class AppViewModel(
         api.lookupAddress(
             intake.id,
             UUID.randomUUID().toString(),
-            AddressLookupRequest(intake.revision, _state.value.postcode, number, _state.value.addition.ifBlank { null }),
+            AddressLookupRequest(
+                expectedRevision = intake.revision,
+                postcode = _state.value.postcode,
+                houseNumber = number,
+                addition = _state.value.addition.ifBlank { null },
+            ),
+        )
+        refresh(intake.id)
+        _state.value = _state.value.copy(screen = Screen.Address)
+    }
+
+    fun locationDenied() {
+        _state.value = _state.value.copy(error = "Locatie geweigerd. Vul de postcode in.")
+    }
+
+    fun lookupFromGps(locator: DeviceAddressLocator) = run("gps") {
+        val intake = _state.value.intake ?: return@run
+        if (!locator.hasPermission()) {
+            locationDenied()
+            return@run
+        }
+        val fix = runCatching { locator.currentLocation() }.getOrElse { error ->
+            throw IllegalStateException(friendlyGpsError(error), error)
+        }
+        val hints = locator.nearbyAddresses(fix.latitude, fix.longitude)
+        api.lookupAddress(
+            intake.id,
+            UUID.randomUUID().toString(),
+            AddressLookupRequest(
+                expectedRevision = intake.revision,
+                latitude = fix.latitude,
+                longitude = fix.longitude,
+                nearby = hints,
+            ),
         )
         refresh(intake.id)
         _state.value = _state.value.copy(screen = Screen.Address)
@@ -243,6 +277,14 @@ class AppViewModel(
                 voiceSessionId = session.id,
                 error = "Spraak is niet live verbonden (geen OPENAI_API_KEY). U kunt typen.",
             )
+        }
+    }
+
+    private fun friendlyGpsError(error: Throwable): String {
+        val message = error.message.orEmpty()
+        return when {
+            message.contains("location_denied", ignoreCase = true) -> "Locatie geweigerd. Vul de postcode in."
+            else -> "Locatie is niet beschikbaar. Vul de postcode in."
         }
     }
 
