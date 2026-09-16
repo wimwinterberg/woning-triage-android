@@ -9,6 +9,7 @@ import android.location.LocationManager
 import android.os.Build
 import android.os.CancellationSignal
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -28,38 +29,42 @@ class DeviceAddressLocator(private val context: Context) {
     }
 
     @SuppressLint("MissingPermission")
-    suspend fun currentLocation(): GeoPoint = withTimeout(15_000) {
-        suspendCancellableCoroutine { cont ->
-            val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-            val provider = when {
-                manager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-                manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-                else -> {
-                    cont.resumeWithException(IllegalStateException("location_unavailable"))
-                    return@suspendCancellableCoroutine
+    suspend fun currentLocation(): GeoPoint = try {
+        withTimeout(15_000) {
+            suspendCancellableCoroutine { cont ->
+                val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                val provider = when {
+                    manager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+                    manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+                    else -> {
+                        cont.resumeWithException(IllegalStateException("location_unavailable"))
+                        return@suspendCancellableCoroutine
+                    }
                 }
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                val cancel = CancellationSignal()
-                cont.invokeOnCancellation { cancel.cancel() }
-                manager.getCurrentLocation(provider, cancel, context.mainExecutor) { location ->
-                    val fix = location ?: manager.getLastKnownLocation(provider)
-                    if (fix != null) {
-                        cont.resume(GeoPoint(fix.latitude, fix.longitude))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    val cancel = CancellationSignal()
+                    cont.invokeOnCancellation { cancel.cancel() }
+                    manager.getCurrentLocation(provider, cancel, context.mainExecutor) { location ->
+                        val fix = location ?: manager.getLastKnownLocation(provider)
+                        if (fix != null) {
+                            cont.resume(GeoPoint(fix.latitude, fix.longitude))
+                        } else {
+                            cont.resumeWithException(IllegalStateException("location_unavailable"))
+                        }
+                    }
+                } else {
+                    val last = manager.getLastKnownLocation(provider)
+                        ?: manager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                    if (last != null) {
+                        cont.resume(GeoPoint(last.latitude, last.longitude))
                     } else {
                         cont.resumeWithException(IllegalStateException("location_unavailable"))
                     }
                 }
-            } else {
-                val last = manager.getLastKnownLocation(provider)
-                    ?: manager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-                if (last != null) {
-                    cont.resume(GeoPoint(last.latitude, last.longitude))
-                } else {
-                    cont.resumeWithException(IllegalStateException("location_unavailable"))
-                }
             }
         }
+    } catch (_: TimeoutCancellationException) {
+        throw IllegalStateException("location_unavailable")
     }
 
     suspend fun nearbyAddresses(latitude: Double, longitude: Double): List<NearbyAddressHint> =
