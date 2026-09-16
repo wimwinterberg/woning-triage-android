@@ -9,8 +9,8 @@ use Psr\Log\NullLogger;
 
 /**
  * Operational address-lookup logs without address PII.
- * Writes to STDOUT and STDERR so `docker compose logs -f live-gateway` shows them
- * on the same stream as commentary lines.
+ * Writes to STDERR so `docker compose logs -f live-gateway api` shows them
+ * without corrupting HTTP JSON from `php -S`.
  */
 final class AddressLookupLogger
 {
@@ -46,9 +46,8 @@ final class AddressLookupLogger
             $event,
             $parts === [] ? '' : ' '.implode(' ', $parts),
         );
-        fwrite(STDOUT, $line);
+        // Never STDOUT: php -S is CLI SAPI, so STDOUT is the HTTP body.
         fwrite(STDERR, $line);
-        fflush(STDOUT);
         fflush(STDERR);
     }
 

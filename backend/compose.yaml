@@ -6,8 +6,11 @@ services:
     ports:
       - "${HTTP_PORT:-8000}:8000"
     environment:
-      APP_ENV: ${APP_ENV:-dev}
-      APP_DEBUG: ${APP_DEBUG:-1}
+      # Keep Compose on dev. backend/.env often has APP_ENV=prod for App Platform,
+      # which compiles a dump that is not auto-invalidated and, with APP_DEBUG=1,
+      # turns "headers already sent" into a second JSON body the app cannot parse.
+      APP_ENV: dev
+      APP_DEBUG: "1"
       APP_SECRET: ${APP_SECRET:-change-me}
       DEFAULT_URI: http://localhost:8000
       DATABASE_URL: postgresql://${POSTGRES_USER:-woningtriage}:${POSTGRES_PASSWORD:-woningtriage}@database:5432/${POSTGRES_DB:-woningtriage}?serverVersion=16&charset=utf8
@@ -19,6 +22,7 @@ services:
       MESSENGER_TRANSPORT_DSN: doctrine://default?auto_setup=0
     volumes:
       - ./:/app
+      - api_var_cache:/app/var/cache
       - composer_cache:/root/.composer/cache
     depends_on:
       database:
@@ -42,8 +46,8 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      APP_ENV: ${APP_ENV:-dev}
-      APP_DEBUG: ${APP_DEBUG:-1}
+      APP_ENV: dev
+      APP_DEBUG: "1"
       APP_SECRET: ${APP_SECRET:-change-me}
       DATABASE_URL: postgresql://${POSTGRES_USER:-woningtriage}:${POSTGRES_PASSWORD:-woningtriage}@database:5432/${POSTGRES_DB:-woningtriage}?serverVersion=16&charset=utf8
       # Same backend/.env interpolation as api. Recreate after changing keys.
@@ -53,6 +57,7 @@ services:
       SKIP_RELEASE: "1"
     volumes:
       - ./:/app
+      - live_gateway_var_cache:/app/var/cache
       - composer_cache:/root/.composer/cache
     tty: true
     command: php -d output_buffering=0 bin/console woningtriage:live-gateway
@@ -92,6 +97,8 @@ services:
 
 volumes:
   composer_cache:
+  api_var_cache:
+  live_gateway_var_cache:
 ###> doctrine/doctrine-bundle ###
   database_data:
 ###< doctrine/doctrine-bundle ###

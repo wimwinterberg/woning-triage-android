@@ -43,7 +43,8 @@ Classificatiecatalogus: importer `woningtriage:import-classification`. Productie
 ## Docker (lokaal)
 
 - `backend/compose.yaml` start `api` (PHP 8.4 built-in server op poort 8000) en PostgreSQL 16.
-- Eerste start: `cd backend && docker compose up --build`. Entrypoint wacht op de database en draait `woningtriage:release`.
+- Eerste start: `cd backend && docker compose up --build`. Entrypoint wist Symfony-cache, warmt hem opnieuw en draait `woningtriage:release`. `api` en `live-gateway` hebben elk een eigen cache-volume, zodat een oude `var/cache/prod` op de host de worker niet laat crashen.
+- Lokale Compose pinnet `APP_ENV=dev` (niet de `APP_ENV=prod` uit `backend/.env` voor App Platform). Address-logs gaan alleen naar STDERR, zodat `php -S` geen extra JSON achter de HTTP-body plakt.
 - Live-gateway: `OPENAI_API_KEY` in `backend/.env`, daarna `docker compose --profile live up --force-recreate --build`.
 - Logs: `docker compose --profile live logs -f live-gateway api`. Spraakdelegatie staat in `live-gateway`; HTTP-timing in `api`.
 - Telefoon: `ngrok http 8000`, daarna APK met `-PBACKEND_URL=https://….ngrok-free.app/`. De app zet `ngrok-skip-browser-warning` op die hosts.

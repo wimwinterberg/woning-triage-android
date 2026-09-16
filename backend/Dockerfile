@@ -28,4 +28,4 @@ RUN chmod +x /usr/local/bin/woningtriage-entrypoint
 
 EXPOSE 8000
 ENTRYPOINT ["woningtriage-entrypoint"]
-CMD ["php", "-S", "0.0.0.0:8000", "-t", "public"]
+CMD ["php", "-d", "display_errors=0", "-S", "0.0.0.0:8000", "-t", "public"]

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Command;
 
-use App\Address\AddressProvider;
+use App\Address\WcsAddressProvider;
 use App\Entity\VoiceSession;
 use App\Live\LiveGatewayCommandQueue;
 use App\Live\LiveGreeting;
@@ -16,6 +16,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Output\StreamOutput;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use WebSocket\Client as WebSocketClient;
 use WebSocket\Exception\ConnectionClosedException;
 use WebSocket\Exception\ConnectionTimeoutException;
@@ -35,7 +36,7 @@ final class LiveGatewayCommand extends Command
         private readonly LiveGatewayCommandQueue $queue,
         private readonly EntityManagerInterface $entityManager,
         private readonly IntakeService $intakeService,
-        private readonly AddressProvider $addressProvider,
+        #[Autowire('%env(default::OPENAI_API_KEY)%')]
         private readonly ?string $apiKey,
     ) {
         parent::__construct();
@@ -64,7 +65,7 @@ final class LiveGatewayCommand extends Command
 
         $this->log($output, 'Live gateway waiting for voice sessions. Ctrl+C to stop.');
         $this->log($output, 'Follow logs: docker compose --profile live logs -f live-gateway api');
-        $this->log($output, 'Address lookup provider='.$this->addressProvider::class);
+        $this->log($output, 'Address lookup provider='.WcsAddressProvider::class);
         $idleLoggedAt = 0;
         while (true) {
             $pending = $this->queue->pending();

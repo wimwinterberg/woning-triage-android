@@ -42,6 +42,9 @@ final class ApiExceptionSubscriber implements EventSubscriberInterface
 
     public function onException(ExceptionEvent $event): void
     {
+        if (headers_sent()) {
+            return;
+        }
         $request = $event->getRequest();
         if (!str_starts_with($request->getPathInfo(), '/api/')) {
             return;

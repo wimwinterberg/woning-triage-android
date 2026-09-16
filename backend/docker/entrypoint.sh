@@ -11,6 +11,12 @@ if [ ! -f vendor/autoload.php ] || [ "${COMPOSER_INSTALL:-0}" = "1" ]; then
     fi
 fi
 
+# Bind-mounted ./:/app keeps host var/cache across image rebuilds. Prod dumps are
+# not invalidated when constructors or classes change (PdokAddressProvider,
+# LiveGatewayCommand $apiKey vs WcsAddressProvider).
+cache_env="${APP_ENV:-dev}"
+echo "Resetting Symfony cache (${cache_env})..."
+rm -rf var/cache/dev var/cache/prod var/cache/test
 mkdir -p var/cache var/log var/share
 
 wait_for_database() {
@@ -49,6 +55,8 @@ if [ "${SKIP_DB_WAIT:-0}" != "1" ]; then
     echo "Waiting for PostgreSQL..."
     wait_for_database
 fi
+
+php bin/console cache:warmup --no-interaction
 
 if [ "${SKIP_RELEASE:-0}" != "1" ]; then
     php bin/console doctrine:database:create --if-not-exists --no-interaction || true

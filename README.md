@@ -46,10 +46,11 @@ Spraak (GPT-Live) vereist `OPENAI_API_KEY` in `backend/.env` (Compose leest dat 
 
 Adreslookup gebruikt de We Create Solutions Address API. Zet `WCS_ADDRESS_API_KEY` in hetzelfde `backend/.env`. Zonder key geeft een echte postcode `503` (niet een nepstraat). CI gebruikt de fake provider.
 
-Na het zetten of wijzigen van keys containers opnieuw aanmaken:
+Na git pull, of na het zetten of wijzigen van keys, containers opnieuw aanmaken (niet alleen restart):
 
 ```bash
 cd backend
+docker compose --profile live down
 docker compose --profile live up --force-recreate --build
 ```
 
