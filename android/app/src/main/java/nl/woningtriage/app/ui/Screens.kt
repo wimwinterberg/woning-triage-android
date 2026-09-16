@@ -21,17 +21,21 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -131,13 +135,15 @@ private fun ConversationScreen(state: AppUiState, viewModel: AppViewModel) {
         },
     ) { padding ->
         val content: @Composable () -> Unit = {
-            Text(statusLabel(state), style = MaterialTheme.typography.labelLarge)
-            state.intake?.nextQuestion?.text?.let { Text(it, style = MaterialTheme.typography.titleMedium) }
+            StatusChip(statusLabel(state))
+            state.intake?.nextQuestion?.text?.let { Text(it, style = MaterialTheme.typography.headlineSmall) }
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Transcript(state.transcript)
             LedoCard(state.intake, onField = viewModel::openField)
             AddressCandidatesCard(state.intake, onVerify = viewModel::verifyCandidate)
-            OutlinedButton(onClick = viewModel::goAddress) { Text(stringResource(R.string.lookup_address)) }
+            OutlinedButton(onClick = viewModel::goAddress, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                Text(stringResource(R.string.lookup_address))
+            }
         }
         if (tablet) {
             Row(Modifier.padding(padding).fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -212,7 +218,7 @@ private fun ReviewRequiredScreen(state: AppUiState, viewModel: AppViewModel) {
 
 @Composable
 private fun FieldEditScreen(state: AppUiState, viewModel: AppViewModel) {
-    ScreenScaffold(state.editingField.orEmpty(), state.error) {
+    ScreenScaffold(fieldTitle(state.editingField), state.error) {
         Text(stringResource(R.string.dependent_review), style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(state.editingValue, viewModel::onEditValue, modifier = Modifier.fillMaxWidth())
         Button(onClick = { viewModel.submitField("set") }, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text(stringResource(R.string.send)) }
@@ -253,7 +259,17 @@ private fun Modifier.alignWidth() = this.fillMaxWidth()
 private fun Transcript(lines: List<TranscriptLine>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         lines.forEach { line ->
-            Card(Modifier.fillMaxWidth()) {
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (line.speaker == "assistant") {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+                ),
+                shape = RoundedCornerShape(16.dp),
+            ) {
                 Column(Modifier.padding(12.dp)) {
                     Text(line.speaker, style = MaterialTheme.typography.labelMedium)
                     Text(line.text)
@@ -283,14 +299,25 @@ private fun AddressCandidatesCard(intake: Intake?, onVerify: (String) -> Unit) {
 
 @Composable
 private fun LedoCard(intake: Intake?, onField: (String) -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(20.dp),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(stringResource(R.string.what_we_know), style = MaterialTheme.typography.titleMedium)
-            listOf("location" to R.string.location, "element" to R.string.element, "defect" to R.string.defect, "cause" to R.string.cause).forEach { (key, label) ->
+            listOf("location" to R.string.location, "element" to R.string.element, "defect" to R.string.defect, "cause" to R.string.cause).forEachIndexed { index, (key, label) ->
+                if (index > 0) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                }
                 val field = intake?.fields?.get(key)
-                Row(Modifier.fillMaxWidth().clickable { onField(key) }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(stringResource(label))
-                    Text(fieldLabel(field?.state, field?.value))
+                Row(
+                    Modifier.fillMaxWidth().clickable { onField(key) }.padding(vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(stringResource(label), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(fieldLabel(field?.state, field?.value), style = MaterialTheme.typography.titleSmall)
                 }
             }
             intake?.hypotheses.orEmpty().forEach {
@@ -298,6 +325,25 @@ private fun LedoCard(intake: Intake?, onField: (String) -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun StatusChip(label: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shape = RoundedCornerShape(50),
+    ) {
+        Text(label, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+@Composable
+private fun fieldTitle(key: String?): String = when (key) {
+    "location" -> stringResource(R.string.location)
+    "element" -> stringResource(R.string.element)
+    "defect" -> stringResource(R.string.defect)
+    "cause" -> stringResource(R.string.cause)
+    else -> key.orEmpty()
 }
 
 @Composable

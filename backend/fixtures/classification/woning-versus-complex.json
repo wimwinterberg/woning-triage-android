@@ -1,0 +1,55 @@
+{
+  "status": "success",
+  "data": {
+    "ledoData": [
+      {
+        "label": "Woning",
+        "value": "woning",
+        "children": [
+          {
+            "label": "Keuken",
+            "value": "loc_keuken",
+            "children": [
+              {
+                "label": "Kraan",
+                "value": "el_kraan",
+                "children": [
+                  {
+                    "label": "Lekt",
+                    "value": "def_lekt_woning",
+                    "rm_competence_id": "comp_loodgieter",
+                    "planning_duration": 1.0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "label": "Complex",
+        "value": "complex",
+        "children": [
+          {
+            "label": "Keuken",
+            "value": "loc_keuken_complex",
+            "children": [
+              {
+                "label": "Kraan",
+                "value": "el_kraan_complex",
+                "children": [
+                  {
+                    "label": "Lekt",
+                    "value": "def_lekt_complex",
+                    "rm_competence_id": "comp_loodgieter",
+                    "planning_duration": 9.0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
