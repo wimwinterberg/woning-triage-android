@@ -33,8 +33,7 @@ Gespreksprompt: `App\Live\ConversationPrompt` (versie `conversation-v2`), Nederl
 Providerinterface met:
 
 - **We Create Solutions Address API** (`GET https://address-api.createsolutions.dev/v1/postcode/{postalCode}/{houseNumber}`, Bearer `WCS_ADDRESS_API_KEY`). Alleen **Nederland** (`country=nl`); BE/DE-resultaten en kandidaten met een andere postcode of huisnummer worden genegeerd. 200 geeft kandidaten; 404 is een lege lijst; 401/429/503/500 is `address_lookup_unavailable`. Meerdere units komen via `houseLetter` / `houseNumberAddition`. Fake-resultaten (`Voorbeeldstraat`) mogen niet als live BAG worden gepresenteerd. Address-lookup logs gaan naar STDERR (`docker compose logs -f api live-gateway`) zonder postcode, huisnummer of straat. Bij “nee” / verkeerde postcode tijdens bevestigen wordt de lookup gewist en opnieuw gevraagd.
-- **PDOK Locatieserver v3.1** als fallback (`ADDRESS_PROVIDER=pdok`).
-- **FakeAddressProvider** alleen in tests (`when@test`). Docker Compose zet `ADDRESS_PROVIDER=wcs` vast, ook als `.env` nog `pdok` bevat. Zet `WCS_ADDRESS_API_KEY` in `backend/.env` (niet alleen `.env.local`) en recreate: `docker compose --profile live up --force-recreate`. De live-gateway logt bij start `Address lookup provider=App\Address\WcsAddressProvider`.
+- **FakeAddressProvider** alleen in tests (`when@test`). Live/dev gebruikt altijd WCS. Zet `WCS_ADDRESS_API_KEY` in `backend/.env` (niet alleen `.env.local`) en recreate: `docker compose --profile live up --force-recreate`. De live-gateway logt bij start `Address lookup provider=App\Address\WcsAddressProvider`.
 
 ## Beslisboom
 

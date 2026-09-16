@@ -50,7 +50,6 @@ De spec zet deze al. Controleer ze in het control panel:
 | `DATABASE_URL` | `${db.DATABASE_URL}` (managed PostgreSQL, inclusief `sslmode=require`) |
 | `DEFAULT_URI` | `${api.PUBLIC_URL}` |
 | `CORS_ALLOW_ORIGIN` | `^https://.*$` (native Android gebruikt geen CORS) |
-| `ADDRESS_PROVIDER` | `wcs` |
 | `WCS_ADDRESS_API_KEY` | Address API-sleutel (secret; leeg = adreslookup `503`) |
 
 Doctrine pinnet PostgreSQL **16** in `config/packages/doctrine.yaml`, zodat de DigitalOcean-URL geen `serverVersion` hoeft te bevatten.

@@ -39,9 +39,6 @@ services:
   - key: CORS_ALLOW_ORIGIN
     scope: RUN_TIME
     value: "^https://.*$"
-  - key: ADDRESS_PROVIDER
-    scope: RUN_TIME
-    value: wcs
   - key: WCS_ADDRESS_API_KEY
     scope: RUN_TIME
     type: SECRET
@@ -80,9 +77,6 @@ workers:
   - key: DATABASE_URL
     scope: RUN_TIME
     value: ${db.DATABASE_URL}
-  - key: ADDRESS_PROVIDER
-    scope: RUN_TIME
-    value: wcs
   - key: WCS_ADDRESS_API_KEY
     scope: RUN_TIME
     type: SECRET
