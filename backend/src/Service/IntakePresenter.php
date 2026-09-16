@@ -37,11 +37,15 @@ final class IntakePresenter
         if (is_array($address)) {
             unset($address['provider'], $address['latitude'], $address['longitude']);
             if (isset($address['candidates']) && is_array($address['candidates'])) {
-                $address['candidates'] = array_map(static function (array $candidate): array {
+                $safe = [];
+                foreach ($address['candidates'] as $candidate) {
+                    if (!is_array($candidate)) {
+                        continue;
+                    }
                     unset($candidate['provider_id']);
-
-                    return $candidate;
-                }, $address['candidates']);
+                    $safe[] = $candidate;
+                }
+                $address['candidates'] = $safe;
             }
         }
 

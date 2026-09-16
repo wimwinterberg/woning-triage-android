@@ -23,6 +23,10 @@ final class IntakeApiTest extends WebTestCase
         $userB = $auth->createUser('resident-b');
         $this->tokenA = $auth->issueToken($userA['user'])['access_token'];
         $this->tokenB = $auth->issueToken($userB['user'])['access_token'];
+        $provider = static::getContainer()->get(\App\Address\FakeAddressProvider::class);
+        $provider->fail = false;
+        \App\Address\FakeAddressProvider::$failNext = false;
+        \App\Address\FakeAddressProvider::$unavailable = false;
     }
 
     public function testHealthIsPublic(): void
@@ -318,6 +322,49 @@ final class IntakeApiTest extends WebTestCase
             'nearby' => [],
         ], 'gf-empty');
         self::assertSame([], $empty['candidates']);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('unverified', $intake['address']['verification_status']);
+        self::assertSame('address_no_match', $intake['next_question']['id']);
+    }
+
+    public function testGpsLookupAcceptsExactLiveUtrechtPayloadWithoutAutoVerify(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $lookup = $this->postJson('/api/v1/intakes/'.$intake['id'].'/address-lookups', $this->tokenA, [
+            'expected_revision' => 0,
+            'latitude' => 52.10504918,
+            'longitude' => 5.14592574,
+            'nearby' => [
+                ['postcode' => '3573 SJ', 'house_number' => 10],
+                ['postcode' => '3573 SK', 'house_number' => 70],
+                ['postcode' => '3573 SK', 'house_number' => 74],
+                ['postcode' => '3573 SK', 'house_number' => 76],
+                ['postcode' => '3573 SJ', 'house_number' => 207],
+            ],
+        ], 'g-utrecht');
+        self::assertSame([], $lookup['candidates']);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('unverified', $intake['address']['verification_status']);
+        self::assertSame('gps', $intake['address']['source']);
+        self::assertSame('address_no_match', $intake['next_question']['id']);
+        self::assertArrayNotHasKey('latitude', $intake['address']);
+        self::assertArrayNotHasKey('longitude', $intake['address']);
+    }
+
+    public function testGpsLookupReturnsEmptyWhenProviderIsDown(): void
+    {
+        \App\Address\FakeAddressProvider::$unavailable = true;
+        $intake = $this->createIntake($this->tokenA);
+        $lookup = $this->postJson('/api/v1/intakes/'.$intake['id'].'/address-lookups', $this->tokenA, [
+            'expected_revision' => 0,
+            'latitude' => 52.10504918,
+            'longitude' => 5.14592574,
+            'nearby' => [
+                ['postcode' => '3573 SJ', 'house_number' => 207],
+                ['postcode' => '1234 AB', 'house_number' => 12],
+            ],
+        ], 'g-down');
+        self::assertSame([], $lookup['candidates']);
         $intake = $this->getIntake($intake['id'], $this->tokenA);
         self::assertSame('unverified', $intake['address']['verification_status']);
         self::assertSame('address_no_match', $intake['next_question']['id']);

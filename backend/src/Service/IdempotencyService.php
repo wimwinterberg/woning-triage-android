@@ -76,6 +76,12 @@ final class IdempotencyService
      */
     private function hash(array $payload): string
     {
-        return hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+        try {
+            $json = json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        } catch (\JsonException) {
+            throw new ValidationFailedException('Ongeldige JSON.');
+        }
+
+        return hash('sha256', $json);
     }
 }

@@ -31,6 +31,16 @@ $request = Request::createFromGlobals();
 $response = $kernel->handle($request);
 $content = (string) $response->getContent();
 $response->headers->set('Content-Length', (string) \strlen($content));
+$path = $request->getPathInfo();
+if ($path !== '/' && $path !== '/health' && $path !== '/api/v1/health') {
+    error_log(sprintf(
+        'api %s %s %d bytes=%d',
+        $request->getMethod(),
+        $path,
+        $response->getStatusCode(),
+        strlen($content),
+    ));
+}
 $response->sendHeaders();
 echo $content;
 flush();
@@ -39,7 +49,7 @@ ob_start();
 try {
     $kernel->terminate($request, $response);
 } catch (Throwable $exception) {
-    fwrite(STDERR, '[router] terminate '.$exception->getMessage()."\n");
+    error_log('[router] terminate '.$exception::class);
 }
 $extra = ob_get_clean();
 if (is_string($extra) && $extra !== '') {

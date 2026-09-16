@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\EventSubscriber;
 
 use App\Exception\ApiException;
+use App\Http\OperationalLog;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
@@ -34,17 +35,29 @@ final class ApiExceptionSubscriber implements EventSubscriberInterface
 
     public function onResponse(ResponseEvent $event): void
     {
-        $requestId = $event->getRequest()->attributes->get('request_id');
+        $request = $event->getRequest();
+        $requestId = $request->attributes->get('request_id');
         if (is_string($requestId)) {
             $event->getResponse()->headers->set('X-Request-Id', $requestId);
         }
+        $path = $request->getPathInfo();
+        if ($path === '/' || $path === '/health' || $path === '/api/v1/health') {
+            return;
+        }
+        if (!str_starts_with($path, '/api/')) {
+            return;
+        }
+        OperationalLog::write(sprintf(
+            'api %s %s %d request_id=%s',
+            $request->getMethod(),
+            $path,
+            $event->getResponse()->getStatusCode(),
+            is_string($requestId) ? $requestId : 'unknown',
+        ));
     }
 
     public function onException(ExceptionEvent $event): void
     {
-        if (headers_sent()) {
-            return;
-        }
         $request = $event->getRequest();
         if (!str_starts_with($request->getPathInfo(), '/api/')) {
             return;
@@ -54,17 +67,18 @@ final class ApiExceptionSubscriber implements EventSubscriberInterface
         if (!$exception instanceof ApiException && !$exception instanceof AuthenticationException) {
             $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : 500;
             if ($status >= 500) {
-                fwrite(STDERR, sprintf(
-                    "[%s] API internal_error request_id=%s exception=%s path=%s file=%s line=%d\n",
-                    gmdate('Y-m-d H:i:s'),
+                OperationalLog::write(sprintf(
+                    'API internal_error request_id=%s exception=%s path=%s file=%s line=%d',
                     $requestId,
                     $exception::class,
                     $request->getPathInfo(),
                     $exception->getFile(),
                     $exception->getLine(),
                 ));
-                fflush(STDERR);
             }
+        }
+        if (headers_sent()) {
+            return;
         }
 
         if ($exception instanceof ApiException) {

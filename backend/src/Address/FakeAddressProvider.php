@@ -15,6 +15,8 @@ final class FakeAddressProvider implements AddressProvider
 
     public static bool $failNext = false;
 
+    public static bool $unavailable = false;
+
     /**
      * @param list<AddressCandidate> $candidates
      */
@@ -32,7 +34,7 @@ final class FakeAddressProvider implements AddressProvider
 
     public function lookup(string $postcode, int $houseNumber, ?string $addition): array
     {
-        if ($this->fail || self::$failNext || $postcode === '1111 AA') {
+        if ($this->fail || self::$unavailable || self::$failNext || $postcode === '1111 AA') {
             self::$failNext = false;
             throw new AddressLookupUnavailableException();
         }

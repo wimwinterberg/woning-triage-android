@@ -290,8 +290,6 @@ final class IntakeService
      */
     public function lookupAddress(Intake $intake, int $expectedRevision, array $request): array
     {
-        $this->assertMutable($intake);
-        $intake->assertExpectedRevision($expectedRevision);
         $gps = $this->isGpsLookup($request);
         $nearbyHintCount = is_array($request['nearby'] ?? null) ? count($request['nearby']) : 0;
         $this->addressLookupLogger->log('accepted', [
@@ -299,7 +297,11 @@ final class IntakeService
             'source' => $gps ? 'gps' : 'ui',
             'nearby_hint_count' => $nearbyHintCount,
             'has_postcode' => trim((string) ($request['postcode'] ?? '')) !== '',
+            'intake_revision' => $intake->getRevision(),
+            'expected_revision' => $expectedRevision,
         ]);
+        $this->assertMutable($intake);
+        $intake->assertExpectedRevision($expectedRevision);
 
         try {
             if ($gps) {
@@ -1083,7 +1085,13 @@ final class IntakeService
         }
 
         if ($merged === [] && $unavailable > 0 && $unavailable === count($hints) && $hints !== []) {
-            throw new \App\Exception\AddressLookupUnavailableException();
+            $this->addressLookupLogger->log('gps_provider_unavailable', [
+                'outcome' => 'all_hints_unavailable',
+                'provider' => $this->addressProvider::class,
+                'hint_count' => count($hints),
+            ]);
+
+            return [];
         }
 
         return $merged;

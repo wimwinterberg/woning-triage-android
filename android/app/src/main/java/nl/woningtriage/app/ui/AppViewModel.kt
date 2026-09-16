@@ -166,21 +166,23 @@ class AppViewModel(
             locationDenied()
             return@run
         }
+        runCatching { refresh(intake.id) }
+        val latest = _state.value.intake ?: return@run
         val fix = runCatching { locator.currentLocation() }.getOrElse { error ->
             throw IllegalStateException(friendlyGpsError(error), error)
         }
         val hints = locator.nearbyAddresses(fix.latitude, fix.longitude)
         api.lookupAddress(
-            intake.id,
+            latest.id,
             UUID.randomUUID().toString(),
             AddressLookupRequest(
-                expectedRevision = intake.revision,
+                expectedRevision = latest.revision,
                 latitude = fix.latitude,
                 longitude = fix.longitude,
                 nearby = hints,
             ),
         )
-        refresh(intake.id)
+        refresh(latest.id)
         _state.value = _state.value.copy(screen = Screen.Address)
     }
 

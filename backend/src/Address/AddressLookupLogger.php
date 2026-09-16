@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Address;
 
+use App\Http\OperationalLog;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
  * Operational address-lookup logs without address PII.
- * Writes to STDERR so `docker compose logs -f live-gateway api` shows them
- * without corrupting HTTP JSON from `php -S`.
+ * Never writes STDOUT: php -S uses STDOUT as the HTTP body.
  */
 final class AddressLookupLogger
 {
@@ -31,7 +31,10 @@ final class AddressLookupLogger
     public function log(string $event, array $context = []): void
     {
         $safe = $this->withoutPii($context);
-        $this->logger->info('Address lookup '.$event, $safe);
+        try {
+            $this->logger->info('Address lookup '.$event, $safe);
+        } catch (\Throwable) {
+        }
         if (($_SERVER['APP_ENV'] ?? '') === 'test') {
             return;
         }
@@ -41,14 +44,11 @@ final class AddressLookupLogger
             $parts[] = $key.'='.$this->format($value);
         }
         $line = sprintf(
-            "[%s] Address lookup %s%s\n",
-            gmdate('Y-m-d H:i:s'),
+            'Address lookup %s%s',
             $event,
             $parts === [] ? '' : ' '.implode(' ', $parts),
         );
-        // Never STDOUT: php -S is CLI SAPI, so STDOUT is the HTTP body.
-        fwrite(STDERR, $line);
-        fflush(STDERR);
+        OperationalLog::write($line);
     }
 
     /**

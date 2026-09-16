@@ -14,7 +14,7 @@ fi
 # This script is invoked from the bind-mount (/app/docker/entrypoint.sh), not
 # the image copy, so git pull + recreate is enough (no --build required).
 cache_env="${APP_ENV:-dev}"
-echo "WONINGTRIAGE_ENTRYPOINT=2 APP_ENV=${cache_env}"
+echo "WONINGTRIAGE_ENTRYPOINT=3 APP_ENV=${cache_env} GPS_LOOKUP=array"
 echo "Resetting Symfony cache (${cache_env})..."
 rm -rf var/cache/dev var/cache/prod var/cache/test
 mkdir -p var/cache var/log var/share

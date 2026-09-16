@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Exception\AddressLookupUnavailableException;
+use App\Exception\ApiException;
 use App\Exception\BadRequestException;
 use App\Http\JsonBody;
+use App\Http\OperationalLog;
 use App\Service\IdempotencyService;
 use App\Service\IntakeEventPublisher;
 use App\Service\IntakeService;
@@ -159,21 +162,43 @@ final class IntakeController extends AbstractController
     #[Route('/{id}/address-lookups', methods: ['POST'])]
     public function addressLookup(string $id, Request $request, #[CurrentUser] User $user): JsonResponse
     {
-        $intake = $this->intakeService->getOwned($id, $user);
-        $body = JsonBody::parse($request);
-        $key = $this->idempotency->requireKey($request);
-        $existing = $this->idempotency->find($user->getId(), $id, 'address_lookup', $key, $body);
-        if ($existing !== null) {
-            return new JsonResponse($existing->getResponseBody(), $existing->getStatusCode());
-        }
-        $result = $this->intakeService->lookupAddress(
-            $intake,
-            $this->intValue($body, 'expected_revision'),
-            $body,
-        );
-        $this->idempotency->store($user->getId(), $id, 'address_lookup', $key, $body, 200, $result);
+        $body = [];
+        try {
+            $intake = $this->intakeService->getOwned($id, $user);
+            $body = JsonBody::parse($request);
+            OperationalLog::write(sprintf(
+                'address-lookup start intake=%s gps=%d nearby=%d revision=%d expected=%s',
+                $id,
+                array_key_exists('latitude', $body) || array_key_exists('longitude', $body) ? 1 : 0,
+                is_array($body['nearby'] ?? null) ? count($body['nearby']) : 0,
+                $intake->getRevision(),
+                is_numeric($body['expected_revision'] ?? null) ? (string) (int) $body['expected_revision'] : 'missing',
+            ));
+            $key = $this->idempotency->requireKey($request);
+            $existing = $this->idempotency->find($user->getId(), $id, 'address_lookup', $key, $body);
+            if ($existing !== null) {
+                return new JsonResponse($existing->getResponseBody(), $existing->getStatusCode());
+            }
+            $result = $this->intakeService->lookupAddress(
+                $intake,
+                $this->intValue($body, 'expected_revision'),
+                $body,
+            );
+            $this->idempotency->store($user->getId(), $id, 'address_lookup', $key, $body, 200, $result);
 
-        return new JsonResponse($result);
+            return new JsonResponse($result);
+        } catch (ApiException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            OperationalLog::write(sprintf(
+                'address-lookup crash exception=%s file=%s line=%d gps=%d',
+                $exception::class,
+                $exception->getFile(),
+                $exception->getLine(),
+                array_key_exists('latitude', $body) || array_key_exists('longitude', $body) ? 1 : 0,
+            ));
+            throw new AddressLookupUnavailableException();
+        }
     }
 
     #[Route('/{id}/address-verifications', methods: ['POST'])]
