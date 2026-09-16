@@ -102,6 +102,12 @@ final class LanguagePolicyTest extends TestCase
         self::assertSame('nl-NL', $policy->isExplicitLanguageRequest('Zet de interface naar het Nederlands'));
         self::assertTrue($policy->isUiSwitchRequest('Zet de interface naar het Nederlands'));
         self::assertFalse($policy->isUiSwitchRequest('Spreek Nederlands alsjeblieft'));
+        self::assertSame('en-GB', $policy->isExplicitLanguageRequest('Switch to English'));
+        self::assertTrue($policy->isUiSwitchRequest('Switch to English'));
+        self::assertSame('en-GB', $policy->isExplicitLanguageRequest('Please speak English'));
+        self::assertFalse($policy->isUiSwitchRequest('Please speak English'));
+        self::assertTrue($policy->isUiSwitchRequest('Switch the interface to English'));
+        self::assertSame('nl-NL', $policy->isExplicitLanguageRequest('Switch to Dutch'));
     }
 
     public function testClearPolishSentenceSwitches(): void

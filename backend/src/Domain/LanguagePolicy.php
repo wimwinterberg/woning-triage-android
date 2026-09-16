@@ -62,10 +62,10 @@ final class LanguagePolicy
     public function isExplicitLanguageRequest(string $text): ?string
     {
         $normalized = mb_strtolower($text);
-        if (preg_match('/(spreek|praat|switch).*(engels|english)|in english|speak english|zet.{0,40}engels/u', $normalized)) {
+        if (preg_match('/(spreek|praat|switch).*(engels|english)|in english|speak english|zet.{0,40}engels|change.{0,40}english|screens?.{0,20}english|naar het engels|in het engels|to english/u', $normalized)) {
             return 'en-GB';
         }
-        if (preg_match('/(spreek|praat).*(nederlands)|in dutch|in het nederlands|naar het nederlands|op (het )?nederlands|nederlands spreken|zet.{0,40}nederlands/u', $normalized)) {
+        if (preg_match('/(spreek|praat|switch).*(nederlands|dutch)|in dutch|in het nederlands|naar het nederlands|op (het )?nederlands|nederlands spreken|zet.{0,40}nederlands|change.{0,40}dutch|screens?.{0,20}dutch/u', $normalized)) {
             return 'nl-NL';
         }
         if (preg_match('/(spreek|praat).*(duits|deutsch)|auf deutsch|in german|speak german/u', $normalized)) {
@@ -103,8 +103,8 @@ final class LanguagePolicy
     {
         $normalized = mb_strtolower($text);
 
-        return preg_match('/\b(interface|scherm(?:en)?|beeldscherm|app[- ]?scherm|ui)\b/u', $normalized) === 1
-            || preg_match('/zet.{0,40}(nederlands|engels|dutch|english|duits|turks)/u', $normalized) === 1;
+        return preg_match('/\b(interface|scherm(?:en)?|beeldscherm|app[- ]?scherm|screens?|ui)\b/u', $normalized) === 1
+            || preg_match('/(zet|switch|change).{0,40}(nederlands|engels|dutch|english|duits|turks|german|french|spanish)/u', $normalized) === 1;
     }
 
     private function decide(string $currentLanguage, string $detected, string $reason): LanguageDecision

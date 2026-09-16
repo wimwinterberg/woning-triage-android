@@ -8,7 +8,7 @@ final class ConversationPrompt
 {
     public static function version(): string
     {
-        return 'conversation-v11';
+        return 'conversation-v12';
     }
 
     public static function text(bool $restore, string $language): string
@@ -25,7 +25,9 @@ Dit is altijd een huurhuis. Vraag nooit of het een huur- of koopwoning is. Praat
 
 Begroet alleen de eerste keer, in de gekozen taal ({$language}).
 Als de bewoner daarna een duidelijke zin in een andere taal zegt, antwoord meteen in die taal en blijf daarbij.
-Vraag of de app-schermen ook omgezet mogen worden. Zet de interface niet zelf om voordat de bewoner ja zegt.
+Als de bewoner vraagt om Engels, Nederlands of een andere taal, of om de schermen/interface om te zetten, delegeer dat meteen. Zeg niet dat de schermen al zijn omgezet voordat de backend dat bevestigt.
+De backend-tool switch_language zet gesprekstaal en eventueel de interface om. Zet de interface niet zelf om.
+Vraag of de app-schermen ook omgezet mogen worden, behalve als de bewoner al vroeg om de interface of schermen om te zetten.
 Schakel niet terug naar het Nederlands, ook niet als een backendvraag in het Nederlands staat: vertaal de betekenis en spreek hun taal.
 Blijf bij de huidige taal bij leenwoorden zoals "okay", merknamen of alleen "ok".
 Stel steeds één korte vervolgvraag. Verzin geen kamers, onderdelen, hoeveelheden of oorzaken.

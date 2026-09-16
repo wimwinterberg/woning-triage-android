@@ -110,6 +110,26 @@ final class LiveFollowUpSpeech
         return self::sayExactly($question, $language);
     }
 
+    public static function afterUiLanguageSwitchSpoken(string $language): string
+    {
+        return match (true) {
+            str_starts_with($language, 'de') => 'Die App-Bildschirme sind jetzt auf Deutsch. Sie können das später noch ändern.',
+            str_starts_with($language, 'tr') => 'Uygulama ekranları artık Türkçe. Bunu daha sonra değiştirebilirsiniz.',
+            str_starts_with($language, 'ja') => 'アプリの画面は日本語になりました。後から変更できます。',
+            str_starts_with($language, 'en') => 'The app screens are now in English. You can change this later.',
+            str_starts_with($language, 'fr') => 'Les écrans de l’application sont maintenant en français. Vous pourrez encore les modifier plus tard.',
+            str_starts_with($language, 'es') => 'Las pantallas de la aplicación están ahora en español. Puede cambiarlo más adelante.',
+            str_starts_with($language, 'pl') => 'Ekrany aplikacji są teraz po polsku. Można to później zmienić.',
+            str_starts_with($language, 'ar') => 'أصبحت شاشات التطبيق الآن بالعربية. يمكنك تغيير ذلك لاحقاً.',
+            default => 'De app-schermen staan nu op Nederlands. U kunt dit later nog wijzigen.',
+        };
+    }
+
+    public static function afterUiLanguageSwitch(string $language): string
+    {
+        return self::sayExactly(self::afterUiLanguageSwitchSpoken($language), $language);
+    }
+
     public static function spokenLanguageName(string $language): string
     {
         return match (true) {

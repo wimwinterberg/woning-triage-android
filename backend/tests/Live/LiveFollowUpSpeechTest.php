@@ -71,4 +71,15 @@ final class LiveFollowUpSpeechTest extends TestCase
             LiveFollowUpSpeech::idleClosingSpoken('en-GB'),
         );
     }
+
+    public function testUiSwitchConfirmationIsSpokenInEnglish(): void
+    {
+        $text = LiveFollowUpSpeech::afterUiLanguageSwitch('en-GB');
+        self::assertStringContainsString('The app screens are now in English', $text);
+        self::assertStringContainsString('Speak only English', $text);
+        self::assertSame(
+            'The app screens are now in English. You can change this later.',
+            LiveFollowUpSpeech::afterUiLanguageSwitchSpoken('en-GB'),
+        );
+    }
 }

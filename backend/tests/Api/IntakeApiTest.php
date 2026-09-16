@@ -537,6 +537,34 @@ final class IntakeApiTest extends WebTestCase
         self::assertNull($intake['ui_language_offer']);
     }
 
+    public function testSpokenSwitchToEnglishAppliesUiWithoutOffer(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'ui-en-switch',
+            'text' => 'Switch to English',
+        ], 'ui-en-switch-msg', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('en-GB', $intake['conversation_language']);
+        self::assertSame('en-GB', $intake['ui_language']);
+        self::assertNull($intake['ui_language_offer']);
+    }
+
+    public function testSpeakEnglishKeepsUiUntilResidentAcceptsOffer(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'speak-en',
+            'text' => 'Please speak English',
+        ], 'speak-en-msg', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('en-GB', $intake['conversation_language']);
+        self::assertSame('nl-NL', $intake['ui_language']);
+        self::assertSame('en-GB', $intake['ui_language_offer']['language'] ?? null);
+    }
+
     public function testGermanTurkishAndJapaneseSwitchAndStay(): void
     {
         $cases = [

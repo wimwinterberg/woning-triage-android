@@ -225,6 +225,7 @@ final class LiveGatewayCommand extends Command
         $this->entityManager->refresh($intake);
         $previousQuestion = (string) ($intake->document()->nextQuestion['text'] ?? '');
         $previousLanguage = $intake->getConversationLanguage();
+        $previousUi = (string) ($intake->document()->uiLanguage ?? '');
         $this->log($output, 'delegation '.$delegationId.' transcript_chars='.mb_strlen($transcript).' text='.$this->clip($transcript));
         $this->sendEvent($client, [
             'type' => 'session.thinking.append',
@@ -264,6 +265,8 @@ final class LiveGatewayCommand extends Command
             $this->log($output, 'analysis failed: '.$exception->getMessage());
         }
         $language = $intake->getConversationLanguage();
+        $ui = (string) ($intake->document()->uiLanguage ?? '');
+        $uiChanged = $previousUi !== $ui;
         if ($language !== $previousLanguage) {
             $this->sendEvent($client, [
                 'type' => 'session.instructions.append',
@@ -272,6 +275,15 @@ final class LiveGatewayCommand extends Command
                 'content' => \App\Live\LiveFollowUpSpeech::switchInstructions($language),
             ]);
             $this->log($output, 'language switch '.$previousLanguage.' -> '.$language);
+        }
+        if ($language !== $previousLanguage || $uiChanged) {
+            $this->log($output, sprintf(
+                'tool switch_language conversation=%s ui=%s apply_ui=%s previous_ui=%s',
+                $language,
+                $ui,
+                $uiChanged ? '1' : '0',
+                $previousUi,
+            ));
         }
         $next = $intake->document()->nextQuestion['text'] ?? 'Gegevens zijn bijgewerkt.';
         $ms = (int) round((microtime(true) - $started) * 1000);
@@ -282,6 +294,9 @@ final class LiveGatewayCommand extends Command
         if (is_string($thankYou) && $thankYou !== '') {
             $content = \App\Live\LiveFollowUpSpeech::afterAddressVerified($thankYou, (string) $next, $language);
             $lastSpokenFollowUp = $thankYou;
+        } elseif ($uiChanged) {
+            $content = \App\Live\LiveFollowUpSpeech::afterUiLanguageSwitch($language)
+                .' Then ask this next question: '.$next;
         } elseif ($offerQuestion !== '') {
             $content = \App\Live\LiveFollowUpSpeech::uiLanguageOffer($offerQuestion, $language)
                 .' Then ask this next question: '.$next;

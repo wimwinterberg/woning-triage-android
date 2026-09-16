@@ -15,6 +15,7 @@ use App\Domain\FieldName;
 use App\Domain\IdGenerator;
 use App\Domain\IntakeStatus;
 use App\Domain\LanguageMode;
+use App\Domain\LanguageSwitchTool;
 use App\Entity\AnalysisTask;
 use App\Entity\Intake;
 use App\Entity\IntakeMessage;
@@ -185,21 +186,30 @@ final class IntakeService
             if ($proposal->independentTime !== null) {
                 $document->addIndependentAnswer('observed_since', $proposal->independentTime, $messageId);
             }
-            if ($proposal->suggestedLanguage !== null) {
-                $intake->setConversationLanguage($proposal->suggestedLanguage);
-                $document->invalidateSummary();
-                $applyUi = $proposal->languageExplicit && (new \App\Domain\LanguagePolicy())->isUiSwitchRequest($text);
-                if ($applyUi) {
-                    $document->uiLanguage = \App\Domain\UiLanguages::uiTagForConversation($proposal->suggestedLanguage);
-                    $document->uiLanguageOffer = null;
-                } else {
+            $switch = LanguageSwitchTool::tryFromResidentText($text);
+            if ($switch instanceof LanguageSwitchTool) {
+                $switch->apply($intake, $document);
+                if (!$switch->applyUi) {
                     $this->maybeOfferUiLanguage($intake, $document);
                 }
                 OperationalLog::write(sprintf(
-                    'language suggested=%s explicit=%s apply_ui=%s conversation=%s ui=%s offer=%s text=%s',
+                    'tool %s language=%s apply_ui=%s conversation=%s ui=%s offer=%s text=%s',
+                    LanguageSwitchTool::NAME,
+                    $switch->language,
+                    $switch->applyUi ? '1' : '0',
+                    $intake->getConversationLanguage(),
+                    (string) ($document->uiLanguage ?? ''),
+                    is_array($document->uiLanguageOffer) ? (string) ($document->uiLanguageOffer['language'] ?? '') : '',
+                    mb_substr(preg_replace('/\s+/u', ' ', $text) ?? $text, 0, 160),
+                ));
+            } elseif ($proposal->suggestedLanguage !== null) {
+                $intake->setConversationLanguage($proposal->suggestedLanguage);
+                $document->invalidateSummary();
+                $this->maybeOfferUiLanguage($intake, $document);
+                OperationalLog::write(sprintf(
+                    'language suggested=%s explicit=%s apply_ui=0 conversation=%s ui=%s offer=%s text=%s',
                     $proposal->suggestedLanguage,
                     $proposal->languageExplicit ? '1' : '0',
-                    $applyUi ? '1' : '0',
                     $intake->getConversationLanguage(),
                     (string) ($document->uiLanguage ?? ''),
                     is_array($document->uiLanguageOffer) ? (string) ($document->uiLanguageOffer['language'] ?? '') : '',
