@@ -338,6 +338,33 @@ final class IntakeApiTest extends WebTestCase
         self::assertSame('ask_element', $intake['next_question']['id']);
     }
 
+    public function testSpokenDigitWordsBecomeADutchPostcode(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => 0,
+            'client_message_id' => 'ledo-w',
+            'text' => 'De keukenkraan druppelt sinds gisteren.',
+        ], 'sw-1', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'cause-w',
+            'text' => 'Oorzaak onbekend',
+        ], 'sw-2', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('ask_address', $intake['next_question']['id']);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'pc-w',
+            'text' => 'een twee drie vier anton bernard',
+        ], 'sw-3', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('1234 AB', $intake['address']['postcode']);
+        self::assertSame('address_ask_house_number', $intake['next_question']['id']);
+    }
+
     /**
      * @return array<string, mixed>
      */

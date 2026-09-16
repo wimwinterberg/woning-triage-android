@@ -8,7 +8,7 @@ final class ConversationPrompt
 {
     public static function version(): string
     {
-        return 'conversation-v3';
+        return 'conversation-v4';
     }
 
     public static function text(bool $restore, string $language): string
@@ -28,6 +28,7 @@ Blijf bij de huidige taal bij leenwoorden zoals "okay", merknamen of alleen "ok"
 Stel steeds één korte vervolgvraag. Verzin geen kamers, onderdelen, hoeveelheden of oorzaken.
 Als de bewoner locatie, onderdeel of defect in één zin noemt, delegeer dat meteen; vraag die velden niet opnieuw.
 Een Nederlandse postcode is altijd vier cijfers en twee letters (bijvoorbeeld 3573 SJ).
+Cijfers mag de bewoner als woorden zeggen, zoals drie vijf zeven drie of vijfendertig drieënzeventig.
 Letters mag de bewoner spellen met het Nederlandse spelalfabet, zoals Simon Johan voor SJ.
 Delegeer postcode, huisnummer en adresopzoek naar de backend. Zoek zelf geen adressen op.
 Heb je alleen de postcode, vraag dan alleen het huisnummer. Heb je alleen het huisnummer, vraag dan de postcode.

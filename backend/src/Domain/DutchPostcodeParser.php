@@ -7,6 +7,7 @@ namespace App\Domain;
 /**
  * Dutch postcodes are 4 digits + 2 letters (e.g. 3573 SJ).
  * Letters may be spoken with the Dutch spelling alphabet (Simon Johan → SJ).
+ * Digits may be spoken as words (drie vijf zeven drie, vijfendertig drieënzeventig).
  */
 final class DutchPostcodeParser
 {
@@ -42,7 +43,30 @@ final class DutchPostcodeParser
     private const STOP = [
         'de', 'het', 'een', 'van', 'en', 'in', 'op', 'te', 'is', 'ik', 'mijn',
         'huisnummer', 'postcode', 'straat', 'woning', 'nummer', 'toevoeging',
-        'the', 'and', 'my', 'number',
+        'the', 'and', 'my', 'number', 'stad', 'plaats',
+    ];
+
+    private const UNITS = [
+        'nul' => 0,
+        'een' => 1, 'één' => 1, 'eén' => 1,
+        'twee' => 2,
+        'drie' => 3,
+        'vier' => 4,
+        'vijf' => 5,
+        'zes' => 6,
+        'zeven' => 7,
+        'acht' => 8,
+        'negen' => 9,
+    ];
+
+    private const TEENS = [
+        'tien' => 10, 'elf' => 11, 'twaalf' => 12, 'dertien' => 13, 'veertien' => 14,
+        'vijftien' => 15, 'zestien' => 16, 'zeventien' => 17, 'achttien' => 18, 'negentien' => 19,
+    ];
+
+    private const TENS = [
+        'twintig' => 20, 'dertig' => 30, 'veertig' => 40, 'vijftig' => 50,
+        'zestig' => 60, 'zeventig' => 70, 'tachtig' => 80, 'negentig' => 90,
     ];
 
     /**
@@ -50,7 +74,7 @@ final class DutchPostcodeParser
      */
     public static function parse(string $text): array
     {
-        $tokens = self::tokenize($text);
+        $tokens = self::rewriteSpokenNumbers(self::tokenize($text));
         $postcode = null;
         $houseNumber = null;
         $addition = null;
@@ -110,6 +134,125 @@ final class DutchPostcodeParser
     }
 
     /**
+     * Turns spoken Dutch numbers into digits and joins adjacent digit runs.
+     * "vijf dertig" (STT-split vijfendertig) + "drieënzeventig" → 3573.
+     *
+     * @param list<string> $tokens
+     * @return list<string>
+     */
+    private static function rewriteSpokenNumbers(array $tokens): array
+    {
+        $items = [];
+        $count = count($tokens);
+        $i = 0;
+        while ($i < $count) {
+            $spoken = self::consumeSpokenNumber($tokens, $i);
+            if ($spoken !== null) {
+                $items[] = ['text' => (string) $spoken['value'], 'digits' => true];
+                $i = $spoken['next'];
+                continue;
+            }
+            $items[] = ['text' => $tokens[$i], 'digits' => false];
+            ++$i;
+        }
+
+        $out = [];
+        $buffer = '';
+        $flush = static function () use (&$out, &$buffer): void {
+            if ($buffer === '') {
+                return;
+            }
+            while (strlen($buffer) > 4 && preg_match('/^[1-9][0-9]{3}/', $buffer) === 1) {
+                $out[] = substr($buffer, 0, 4);
+                $buffer = substr($buffer, 4);
+            }
+            if ($buffer !== '') {
+                $out[] = $buffer;
+                $buffer = '';
+            }
+        };
+        foreach ($items as $item) {
+            if ($item['digits']) {
+                $buffer .= $item['text'];
+                continue;
+            }
+            $flush();
+            $out[] = $item['text'];
+        }
+        $flush();
+
+        return $out;
+    }
+
+    /**
+     * @param list<string> $tokens
+     * @return array{value: int, next: int}|null
+     */
+    private static function consumeSpokenNumber(array $tokens, int $index): ?array
+    {
+        if (!isset($tokens[$index])) {
+            return null;
+        }
+        $token = $tokens[$index];
+        if (preg_match('/^[0-9]+$/', $token) === 1) {
+            return ['value' => (int) $token, 'next' => $index + 1];
+        }
+
+        $compound = self::compoundFromWord($token);
+        if ($compound !== null) {
+            return ['value' => $compound, 'next' => $index + 1];
+        }
+
+        $units = self::lookupMap($token, self::UNITS);
+        $nextIndex = $index + 1;
+        if ($units !== null && isset($tokens[$nextIndex]) && in_array(self::fold($tokens[$nextIndex]), ['en', 'ën'], true)) {
+            ++$nextIndex;
+        }
+        if ($units !== null && $units >= 1 && $units <= 9 && isset($tokens[$nextIndex])) {
+            $tens = self::lookupMap($tokens[$nextIndex], self::TENS);
+            if ($tens !== null) {
+                return ['value' => $units + $tens, 'next' => $nextIndex + 1];
+            }
+        }
+
+        foreach ([self::TEENS, self::TENS, self::UNITS] as $map) {
+            $value = self::lookupMap($token, $map);
+            if ($value !== null) {
+                return ['value' => $value, 'next' => $index + 1];
+            }
+        }
+
+        return null;
+    }
+
+    private static function compoundFromWord(string $token): ?int
+    {
+        $folded = self::fold($token);
+        if (preg_match('/^(een|twee|drie|vier|vijf|zes|zeven|acht|negen)(?:en)?(twintig|dertig|veertig|vijftig|zestig|zeventig|tachtig|negentig)$/u', $folded, $match) !== 1) {
+            return null;
+        }
+
+        return self::UNITS[$match[1]] + self::TENS[$match[2]];
+    }
+
+    /**
+     * @param array<string, int> $map
+     */
+    private static function lookupMap(string $token, array $map): ?int
+    {
+        $folded = self::fold($token);
+
+        return $map[$folded] ?? $map[$token] ?? null;
+    }
+
+    private static function fold(string $token): string
+    {
+        $lower = mb_strtolower($token);
+
+        return str_replace(['ë', 'é', 'è', 'ï'], ['e', 'e', 'e', 'i'], $lower);
+    }
+
+    /**
      * @param list<string> $tokens
      * @return array{letters: string, next: int}|null
      */
@@ -119,7 +262,7 @@ final class DutchPostcodeParser
             return null;
         }
         $first = $tokens[$index];
-        if (preg_match('/^[A-Za-z]{2}$/', $first) && !in_array(mb_strtolower($first), self::STOP, true)) {
+        if (preg_match('/^[A-Za-z]{2}$/', $first) === 1 && !in_array(mb_strtolower($first), self::STOP, true)) {
             return ['letters' => strtoupper($first), 'next' => $index + 1];
         }
         $one = self::tokenToLetter($first);
@@ -133,7 +276,7 @@ final class DutchPostcodeParser
 
     private static function tokenToLetter(string $token): ?string
     {
-        if (preg_match('/^[A-Za-z]$/', $token)) {
+        if (preg_match('/^[A-Za-z]$/', $token) === 1) {
             return strtoupper($token);
         }
         $key = mb_strtolower($token);
@@ -179,7 +322,7 @@ final class DutchPostcodeParser
                 return (int) $tokens[$i + 1];
             }
         }
-        if ($count === 1 && preg_match('/^[1-9][0-9]{0,4}$/', $tokens[0]) && strlen($tokens[0]) < 4) {
+        if ($count === 1 && preg_match('/^[1-9][0-9]{0,4}$/', $tokens[0]) === 1 && strlen($tokens[0]) < 4) {
             return (int) $tokens[0];
         }
 

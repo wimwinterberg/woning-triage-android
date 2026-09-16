@@ -57,4 +57,25 @@ final class DutchPostcodeParserTest extends TestCase
         self::assertNull($parsed['postcode']);
         self::assertNull($parsed['house_number']);
     }
+
+    public function testParsesSpokenDigitWords(): void
+    {
+        $parsed = DutchPostcodeParser::parse('Drie vijf zeven drie S J, Utrecht');
+        self::assertSame('3573 SJ', $parsed['postcode']);
+        self::assertNull($parsed['house_number']);
+    }
+
+    public function testParsesSpokenTensSplitBySpeechToText(): void
+    {
+        $parsed = DutchPostcodeParser::parse('Vijf dertig drieënzeventig Simon Johan');
+        self::assertSame('3573 SJ', $parsed['postcode']);
+        self::assertNull($parsed['house_number']);
+    }
+
+    public function testParsesCompoundSpokenTens(): void
+    {
+        $parsed = DutchPostcodeParser::parse('vijfendertig drieënzeventig simon johan huisnummer twaalf');
+        self::assertSame('3573 SJ', $parsed['postcode']);
+        self::assertSame(12, $parsed['house_number']);
+    }
 }
