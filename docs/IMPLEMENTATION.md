@@ -21,6 +21,7 @@ Handshake volgens de officiële docs (geen Realtime `/v1/realtime/calls`):
 3. Android past `transport.sdp` toe als answer.
 4. Worker `woningtriage:live-gateway` koppelt een sideband op `wss://api.openai.com/v1/live/sessions/{id}/attach`.
 5. Bij `session.delegation.created` analyseert de backend het dossier en stuurt `session.commentary.append`.
+   Sideband-frames worden gelezen via `Message::getContent()` (niet `(string)$message`; dat is de classnaam).
 
 Zonder `OPENAI_API_KEY` blijft tekstintake werken. Een fake SDP is geen live-bewijs; de API zet `live: false` en de app past het antwoord niet toe. `APP_ENV=dev` (Docker) forceert de fake **niet** als de key gezet is. De live-gateway slaat `prov_fake_*`-sessies over en blijft idle zonder skip-spam. Na een nieuwe key: `docker compose --profile live up --force-recreate`.
 
@@ -43,6 +44,7 @@ Classificatiecatalogus: importer `woningtriage:import-classification`. Productie
 - `backend/compose.yaml` start `api` (PHP 8.4 built-in server op poort 8000) en PostgreSQL 16.
 - Eerste start: `cd backend && docker compose up --build`. Entrypoint wacht op de database en draait `woningtriage:release`.
 - Live-gateway: `OPENAI_API_KEY` in `backend/.env`, daarna `docker compose --profile live up --force-recreate --build`.
+- Logs: `docker compose --profile live logs -f live-gateway api`. Spraakdelegatie staat in `live-gateway`; HTTP-timing in `api`.
 - Telefoon: `ngrok http 8000`, daarna APK met `-PBACKEND_URL=https://….ngrok-free.app/`. De app zet `ngrok-skip-browser-warning` op die hosts.
 
 ## DigitalOcean App Platform

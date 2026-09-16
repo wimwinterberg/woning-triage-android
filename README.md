@@ -55,6 +55,35 @@ Postgres is alleen bereikbaar in het Docker-netwerk (niet op localhost:5432), zo
 
 Stoppen: `docker compose down`. Data blijft in het volume `database_data`.
 
+## Logs (spraak / “Gegevens verwerken”)
+
+Spraak loopt via OpenAI-WebRTC. **Verwerken** (LEDO bijwerken) gebeurt in de worker `live-gateway`, niet in de HTTP-API. Typen gaat wel via `api`.
+
+In een tweede terminal:
+
+```bash
+cd backend
+docker compose --profile live logs -f --timestamps live-gateway api
+```
+
+Alleen de worker (delegatie, transcript, analysetijd):
+
+```bash
+docker compose --profile live logs -f --timestamps live-gateway
+```
+
+Alleen HTTP (typen, voice-session starten), met duur in milliseconden:
+
+```bash
+docker compose logs -f --timestamps api
+```
+
+Na een codewijziging in de gateway de worker herstarten (het PHP-proces houdt anders het oude script):
+
+```bash
+docker compose --profile live up -d --force-recreate live-gateway
+```
+
 ## Telefoon via ngrok
 
 De emulator gebruikt `http://10.0.2.2:8000/`. Een echte telefoon op 4G/wifi (niet hetzelfde LAN) bereikt je computer niet. Tunnel de API met [ngrok](https://ngrok.com/download).

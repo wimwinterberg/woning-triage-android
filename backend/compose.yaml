@@ -54,7 +54,8 @@ services:
     volumes:
       - ./:/app
       - composer_cache:/root/.composer/cache
-    command: php bin/console woningtriage:live-gateway
+    tty: true
+    command: php -d output_buffering=0 bin/console woningtriage:live-gateway
     depends_on:
       database:
         condition: service_healthy
