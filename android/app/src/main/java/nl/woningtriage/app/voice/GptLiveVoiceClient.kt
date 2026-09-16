@@ -83,14 +83,14 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
         awaitSet { sdpObserver -> peerConnection?.setLocalDescription(sdpObserver, offer) }
         withTimeoutOrNull(8_000) { observer?.iceComplete?.await() }
         isSendingAudio = true
-        routePlaybackLoud()
+        routePlaybackToSpeaker()
         return peerConnection?.localDescription?.description ?: offer.description
     }
 
     override suspend fun applyRemoteAnswer(sdpAnswer: String) {
         val answer = SessionDescription(SessionDescription.Type.ANSWER, sdpAnswer)
         awaitSet { sdpObserver -> peerConnection?.setRemoteDescription(sdpObserver, answer) }
-        routePlaybackLoud()
+        routePlaybackToSpeaker()
         trySendGreeting()
     }
 
@@ -150,7 +150,7 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
         channel.send(buffer)
     }
 
-    private fun routePlaybackLoud() {
+    private fun routePlaybackToSpeaker() {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
             .setAudioAttributes(
@@ -165,8 +165,6 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
         audioManager.requestAudioFocus(request)
         audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
         audioManager.isSpeakerphoneOn = true
-        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
-        runCatching { audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, max, 0) }
         audioDeviceModule?.setSpeakerMute(false)
     }
 
@@ -219,7 +217,7 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
         override fun onAddStream(stream: MediaStream?) {
             stream?.audioTracks?.forEach { track ->
                 track.setEnabled(true)
-                track.setVolume(10.0)
+                track.setVolume(1.0)
             }
         }
         override fun onRemoveStream(stream: MediaStream?) {}
@@ -229,7 +227,7 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
             val track = receiver?.track() ?: return
             track.setEnabled(true)
             if (track is AudioTrack) {
-                track.setVolume(10.0)
+                track.setVolume(1.0)
             }
         }
     }
