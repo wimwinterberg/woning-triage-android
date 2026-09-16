@@ -43,8 +43,8 @@ private val WoningtriageTypography = Typography(
     displaySmall = TextStyle(
         fontFamily = FontFamily.Serif,
         fontWeight = FontWeight.Normal,
-        fontSize = 40.sp,
-        lineHeight = 46.sp,
+        fontSize = 42.sp,
+        lineHeight = 48.sp,
         color = Ink,
     ),
     headlineLarge = TextStyle(

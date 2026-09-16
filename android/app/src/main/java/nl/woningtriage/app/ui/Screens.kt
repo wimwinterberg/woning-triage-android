@@ -385,9 +385,13 @@ private fun PrimaryAction(
         colors = paperPrimaryButton(),
         contentPadding = ButtonDefaults.ContentPadding,
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Text(text, style = MaterialTheme.typography.labelLarge)
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                modifier = Modifier.align(Alignment.CenterEnd),
+            )
         }
     }
 }
