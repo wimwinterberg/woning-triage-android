@@ -20,10 +20,11 @@ final class AddressProviderFactoryTest extends TestCase
         $pdok = new PdokAddressProvider($http);
         $fake = new FakeAddressProvider();
 
-        self::assertSame($fake, AddressProviderFactory::create($wcs, $pdok, $fake, 'fake'));
-        self::assertSame($pdok, AddressProviderFactory::create($wcs, $pdok, $fake, 'pdok'));
-        self::assertSame($wcs, AddressProviderFactory::create($wcs, $pdok, $fake, 'wcs'));
-        self::assertSame($wcs, AddressProviderFactory::create($wcs, $pdok, $fake, null));
-        self::assertSame($wcs, AddressProviderFactory::create($wcs, $pdok, $fake, ''));
+        self::assertSame($fake, AddressProviderFactory::create($wcs, $pdok, $fake, 'fake', 'test-key'));
+        self::assertSame($pdok, AddressProviderFactory::create($wcs, $pdok, $fake, 'pdok', ''));
+        self::assertSame($wcs, AddressProviderFactory::create($wcs, $pdok, $fake, 'pdok', 'test-key'));
+        self::assertSame($wcs, AddressProviderFactory::create($wcs, $pdok, $fake, 'wcs', 'test-key'));
+        self::assertSame($wcs, AddressProviderFactory::create($wcs, $pdok, $fake, null, 'test-key'));
+        self::assertSame($wcs, AddressProviderFactory::create($wcs, $pdok, $fake, '', 'test-key'));
     }
 }

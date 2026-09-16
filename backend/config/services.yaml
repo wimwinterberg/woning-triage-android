@@ -64,6 +64,7 @@ services:
             $pdok: '@App\Address\PdokAddressProvider'
             $fake: '@App\Address\FakeAddressProvider'
             $name: '%env(default::ADDRESS_PROVIDER)%'
+            $wcsApiKey: '%env(default::WCS_ADDRESS_API_KEY)%'
 
 when@test:
     services:

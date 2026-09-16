@@ -11,11 +11,17 @@ final class AddressProviderFactory
         PdokAddressProvider $pdok,
         FakeAddressProvider $fake,
         ?string $name,
+        string $wcsApiKey = '',
     ): AddressProvider {
-        return match (strtolower(trim((string) $name))) {
-            'fake' => $fake,
-            'pdok' => $pdok,
-            default => $wcs,
-        };
+        $selected = strtolower(trim((string) $name));
+        if ($selected === 'fake') {
+            return $fake;
+        }
+        // A leftover ADDRESS_PROVIDER=pdok must not hide a configured WCS key.
+        if ($selected === 'pdok' && trim($wcsApiKey) === '') {
+            return $pdok;
+        }
+
+        return $wcs;
     }
 }

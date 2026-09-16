@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Command;
 
+use App\Address\AddressProvider;
 use App\Entity\VoiceSession;
 use App\Live\LiveGatewayCommandQueue;
 use App\Live\LiveGreeting;
@@ -34,6 +35,7 @@ final class LiveGatewayCommand extends Command
         private readonly LiveGatewayCommandQueue $queue,
         private readonly EntityManagerInterface $entityManager,
         private readonly IntakeService $intakeService,
+        private readonly AddressProvider $addressProvider,
         private readonly ?string $apiKey,
     ) {
         parent::__construct();
@@ -62,6 +64,7 @@ final class LiveGatewayCommand extends Command
 
         $this->log($output, 'Live gateway waiting for voice sessions. Ctrl+C to stop.');
         $this->log($output, 'Follow logs: docker compose --profile live logs -f live-gateway api');
+        $this->log($output, 'Address lookup provider='.$this->addressProvider::class);
         $idleLoggedAt = 0;
         while (true) {
             $pending = $this->queue->pending();
