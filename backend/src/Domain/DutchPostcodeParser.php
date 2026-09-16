@@ -101,9 +101,10 @@ final class DutchPostcodeParser
                 continue;
             }
             $cursor = self::skipStop($tokens, $cursor);
-            if ($cursor < $count && preg_match('/^[1-9][0-9]{0,4}$/', $tokens[$cursor])) {
-                $houseNumber = (int) $tokens[$cursor];
-                ++$cursor;
+            $house = self::consumeDigitHouseNumber($tokens, $cursor);
+            if ($house !== null) {
+                $houseNumber = $house['value'];
+                $cursor = $house['next'];
             }
             $cursor = self::skipStop($tokens, $cursor);
             if ($cursor < $count && self::isAddition($tokens[$cursor])) {
@@ -538,28 +539,53 @@ final class DutchPostcodeParser
         $count = count($tokens);
         for ($i = 0; $i < $count; ++$i) {
             $keyword = mb_strtolower($tokens[$i]);
-            if (in_array($keyword, ['huisnummer', 'nummer', 'number'], true)
-                && isset($tokens[$i + 1])
-                && preg_match('/^[1-9][0-9]{0,4}$/', $tokens[$i + 1])
-            ) {
-                return (int) $tokens[$i + 1];
+            if (in_array($keyword, ['huisnummer', 'nummer', 'number'], true)) {
+                $house = self::consumeDigitHouseNumber($tokens, $i + 1);
+                if ($house !== null) {
+                    return $house['value'];
+                }
             }
         }
         for ($i = 0; $i < $count; ++$i) {
-            if (!self::isStreetToken($tokens[$i])
-                || !isset($tokens[$i + 1])
-                || preg_match('/^[1-9][0-9]{0,4}$/', $tokens[$i + 1]) !== 1
-            ) {
+            if (!self::isStreetToken($tokens[$i])) {
                 continue;
             }
-
-            return (int) $tokens[$i + 1];
+            $house = self::consumeDigitHouseNumber($tokens, $i + 1);
+            if ($house !== null) {
+                return $house['value'];
+            }
         }
         if ($count === 1 && preg_match('/^[1-9][0-9]{0,4}$/', $tokens[0]) === 1 && strlen($tokens[0]) < 4) {
             return (int) $tokens[0];
         }
 
         return null;
+    }
+
+    /**
+     * @param list<string> $tokens
+     * @return array{value: int, next: int}|null
+     */
+    private static function consumeDigitHouseNumber(array $tokens, int $index): ?array
+    {
+        $digits = [];
+        $cursor = $index;
+        while (isset($tokens[$cursor]) && preg_match('/^[0-9]{1,5}$/', $tokens[$cursor]) === 1) {
+            $digits[] = $tokens[$cursor];
+            ++$cursor;
+            if (strlen(implode('', $digits)) >= 5) {
+                break;
+            }
+        }
+        if ($digits === []) {
+            return null;
+        }
+        $joined = (int) implode('', $digits);
+        if ($joined < 1 || $joined > 99999) {
+            return null;
+        }
+
+        return ['value' => $joined, 'next' => $cursor];
     }
 
     private static function isStreetToken(string $token): bool

@@ -233,6 +233,20 @@ final class LiveGatewayCommand extends Command
             'content' => $content,
         ]);
         $this->log($output, 'commentary sent in '.$ms.'ms question='.$this->clip($next));
+        $address = $intake->document()->address;
+        if (!is_array($address)) {
+            $address = [];
+        }
+        $candidates = is_array($address['candidates'] ?? null) ? $address['candidates'] : [];
+        $candidateCount = array_is_list($candidates) ? count($candidates) : (isset($candidates['candidate_id']) ? 1 : 0);
+        $houseNumber = $address['house_number'] ?? null;
+        $this->log($output, sprintf(
+            'address question_id=%s candidate_count=%d looked_up=%s house_number_digits=%s',
+            (string) ($intake->document()->nextQuestion['id'] ?? ''),
+            $candidateCount,
+            is_string($address['lookup_id'] ?? null) && $address['lookup_id'] !== '' ? '1' : '0',
+            is_numeric($houseNumber) ? (string) strlen((string) (int) $houseNumber) : '0',
+        ));
     }
 
     /**

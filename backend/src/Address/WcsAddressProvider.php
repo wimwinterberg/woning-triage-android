@@ -101,12 +101,16 @@ final class WcsAddressProvider implements AddressProvider
         }
 
         if (!array_is_list($payload)) {
-            $this->lookupLogger->log('unavailable', $base + [
-                'outcome' => 'payload_not_list',
-                'http_status' => $status,
-                'duration_ms' => $this->elapsedMs($started),
-            ]);
-            throw new AddressLookupUnavailableException();
+            if (isset($payload['street']) || isset($payload['postalCode'])) {
+                $payload = [$payload];
+            } else {
+                $this->lookupLogger->log('unavailable', $base + [
+                    'outcome' => 'payload_not_list',
+                    'http_status' => $status,
+                    'duration_ms' => $this->elapsedMs($started),
+                ]);
+                throw new AddressLookupUnavailableException();
+            }
         }
 
         $filter = $addition !== null && trim($addition) !== '' ? trim($addition) : null;
