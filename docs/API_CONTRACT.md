@@ -279,13 +279,25 @@ Dit leesbare contract wordt omgezet naar OpenAPI en gedeelde fixtures vóór het
 
 Alle intake-responses krijgen `address` (initieel `null`) en `report_id` (initieel `null`). Een niet-geverifieerd adres blokkeert samenvatting voor afronding en bevestiging met `422 address_not_verified`.
 
-POST `/intakes/{id}/address-lookups` gebruikt `Idempotency-Key` en deze body:
+POST `/intakes/{id}/address-lookups` gebruikt `Idempotency-Key` en één van deze bodies:
 
 ```json
 {"expected_revision": 2, "postcode": "1234 AB", "house_number": 12, "addition": null}
 ```
 
-De voorbeelden zijn fictieve invoer, geen bestaand geverifieerd adres. De server verhoogt de revisie zodra gewijzigde adresinvoer wordt geaccepteerd, trekt oude verificatie in en bewaart lookup-ID en invoer. Een providerresultaat mag alleen aan die adresversie gekoppeld worden. Response bevat `lookup_id`, `revision`, `address_revision` en `candidates`. Iedere kandidaat bevat `candidate_id`, `postcode`, `house_number`, `addition`, `street`, `city`, `country_code` en `display_address`. Een lege lijst is een geldige lookup zonder match; meerdere kandidaten vereisen selectie. Providerfout geeft `503 address_lookup_unavailable`; een oudere lookup geeft `409 address_lookup_stale`.
+```json
+{
+  "expected_revision": 2,
+  "latitude": 52.090,
+  "longitude": 5.122,
+  "nearby": [
+    {"postcode": "1234 AB", "house_number": 12},
+    {"postcode": "1234 AB", "house_number": 14}
+  ]
+}
+```
+
+De voorbeelden zijn fictieve invoer, geen bestaand geverifieerd adres. GPS-lookup ligt in Nederland (`latitude`/`longitude`); `nearby` zijn hints van de telefoon, geen geverifieerde BAG. De server zoekt iedere hint via de Address API op, ontdubbelt kandidaten en bewaart geen coördinaten in het dossier. De server verhoogt de revisie zodra gewijzigde adresinvoer wordt geaccepteerd, trekt oude verificatie in en bewaart lookup-ID en invoer. Een providerresultaat mag alleen aan die adresversie gekoppeld worden. Response bevat `lookup_id`, `revision`, `address_revision` en `candidates`. Iedere kandidaat bevat `candidate_id`, `postcode`, `house_number`, `addition`, `street`, `city`, `country_code` en `display_address`. Een lege lijst is een geldige lookup zonder match; meerdere kandidaten vereisen selectie in de app. GPS of meerdere treffers verifiëren nooit automatisch. Providerfout geeft `503 address_lookup_unavailable`; een oudere lookup geeft `409 address_lookup_stale`. Coördinaten buiten Nederland geven `422`.
 
 POST `/intakes/{id}/address-verifications`:
 

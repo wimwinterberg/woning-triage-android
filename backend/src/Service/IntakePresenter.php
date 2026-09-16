@@ -35,7 +35,7 @@ final class IntakePresenter
 
         $address = $document->address;
         if (is_array($address)) {
-            unset($address['provider']);
+            unset($address['provider'], $address['latitude'], $address['longitude']);
             if (isset($address['candidates']) && is_array($address['candidates'])) {
                 $address['candidates'] = array_map(static function (array $candidate): array {
                     unset($candidate['provider_id']);

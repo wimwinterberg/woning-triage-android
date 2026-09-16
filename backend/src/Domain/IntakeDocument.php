@@ -264,6 +264,7 @@ final class IntakeDocument
             'evidence_message_id' => null,
             'lookup_at' => null,
             'provider' => null,
+            'source' => null,
         ];
     }
 
@@ -301,6 +302,7 @@ final class IntakeDocument
             'evidence_message_id' => null,
             'lookup_at' => $input['lookup_at'] ?? (new \DateTimeImmutable())->format(DATE_ATOM),
             'provider' => $input['provider'] ?? null,
+            'source' => $input['source'] ?? 'postcode',
         ];
     }
 

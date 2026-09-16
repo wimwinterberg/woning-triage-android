@@ -43,6 +43,10 @@
     <string name="house_number">Huisnummer</string>
     <string name="addition">Toevoeging</string>
     <string name="lookup_address">Adres opzoeken</string>
+    <string name="use_my_location">Gebruik mijn locatie</string>
+    <string name="pick_address">Kies uw adres</string>
+    <string name="several_addresses">Er zijn meerdere adressen gevonden. Tik het juiste adres aan. Het adres wordt pas vastgelegd als u kiest.</string>
+    <string name="or_type_address">Of vul postcode en huisnummer in</string>
     <string name="dependent_review">Door deze wijziging controleren we enkele gegevens opnieuw.</string>
     <string name="demo_no_staff">Er is geen medewerker ingeschakeld. Dit is een demo.</string>
     <string name="mic_denied">Microfoon geweigerd. U kunt typen.</string>

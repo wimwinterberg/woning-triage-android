@@ -25,6 +25,7 @@ final class FakeAddressProvider implements AddressProvider
                 new AddressCandidate('candidate_demo_12', '1234 AB', 12, null, 'Voorbeeldstraat', 'Amsterdam', 'NL', 'fake:1234AB-12'),
                 new AddressCandidate('candidate_demo_12a', '1234 AB', 12, 'A', 'Voorbeeldstraat', 'Amsterdam', 'NL', 'fake:1234AB-12A'),
                 new AddressCandidate('candidate_demo_12b', '1234 AB', 12, 'B', 'Voorbeeldstraat', 'Amsterdam', 'NL', 'fake:1234AB-12B'),
+                new AddressCandidate('candidate_demo_14', '1234 AB', 14, null, 'Overkant', 'Amsterdam', 'NL', 'fake:1234AB-14'),
             ];
         }
     }

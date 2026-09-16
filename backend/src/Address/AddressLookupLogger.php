@@ -18,7 +18,7 @@ final class AddressLookupLogger
         'postcode', 'postalcode', 'postal_code', 'housenumber', 'house_number',
         'street', 'city', 'url', 'query', 'path', 'display_address', 'addition',
         'api_key', 'apikey', 'authorization', 'bearer', 'address', 'lat',
-        'latitude', 'longitude', 'lng', 'municipality', 'province',
+        'latitude', 'longitude', 'lng', 'municipality', 'province', 'nearby',
     ];
 
     public function __construct(private readonly LoggerInterface $logger = new NullLogger())

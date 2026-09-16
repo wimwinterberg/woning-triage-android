@@ -45,7 +45,7 @@ docker compose exec api php bin/console woningtriage:create-user --label=pilot
 
 Spraak (GPT-Live) vereist `OPENAI_API_KEY` in `backend/.env` (Compose leest dat bestand; `.env.local` alleen is niet genoeg). Zonder key blijft **typen** werken. De worker blijft idle en logt geen `Skipping voice_…`. De app past geen fake-SDP toe, zodat WebRTC niet crasht op m-line-volgorde.
 
-Adreslookup gebruikt de We Create Solutions Address API. Zet `WCS_ADDRESS_API_KEY` in hetzelfde `backend/.env`. Zonder key geeft een echte postcode `503` (niet een nepstraat). CI gebruikt de fake provider.
+Adreslookup gebruikt de We Create Solutions Address API. Zet `WCS_ADDRESS_API_KEY` in hetzelfde `backend/.env`. Zonder key geeft een echte postcode `503` (niet een nepstraat). CI gebruikt de fake provider. In de app kan de bewoner **Gebruik mijn locatie** kiezen; bij meerdere treffers moet zelf het juiste adres worden aangetikt.
 
 Na git pull moet in `docker compose logs api` de regel `WONINGTRIAGE_ENTRYPOINT=2` staan. Zo niet, dan draait nog de oude container.
 

@@ -20,6 +20,21 @@ final class AddressNormalizerTest extends TestCase
         self::assertSame('3573 SJ', AddressNormalizer::displayPostcode('3573sj'));
     }
 
+    public function testAcceptsCoordinatesInTheNetherlands(): void
+    {
+        $normalizer = new AddressNormalizer();
+        self::assertSame(52.0902, $normalizer->normalizeLatitude(52.0902));
+        self::assertSame(5.1219, $normalizer->normalizeLongitude('5.1219'));
+        $normalizer->assertInTheNetherlands(52.0902, 5.1219);
+    }
+
+    public function testRejectsCoordinatesOutsideTheNetherlands(): void
+    {
+        $normalizer = new AddressNormalizer();
+        $this->expectException(\InvalidArgumentException::class);
+        $normalizer->assertInTheNetherlands(48.8566, 2.3522);
+    }
+
     public function testRejectsBelgianAndInvalidPostcodes(): void
     {
         $normalizer = new AddressNormalizer();

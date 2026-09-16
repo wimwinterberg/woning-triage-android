@@ -224,6 +224,105 @@ final class IntakeApiTest extends WebTestCase
         self::assertResponseStatusCodeSame(503);
     }
 
+    public function testGpsLookupOffersMultipleCandidatesAndDoesNotAutoVerify(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => 0,
+            'client_message_id' => 'g1',
+            'text' => 'De keukenkraan druppelt sinds gisteren.',
+        ], 'g-m1', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'g2',
+            'text' => 'Ik weet het niet',
+        ], 'g-m2', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+
+        $lookup = $this->postJson('/api/v1/intakes/'.$intake['id'].'/address-lookups', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'latitude' => 52.370,
+            'longitude' => 4.890,
+            'nearby' => [
+                ['postcode' => '1234 AB', 'house_number' => 12],
+                ['postcode' => '1234AB', 'house_number' => 14],
+                ['postcode' => '1234 AB', 'house_number' => 12],
+            ],
+        ], 'g-gps');
+        self::assertCount(4, $lookup['candidates']);
+        $streets = array_values(array_unique(array_map(static fn (array $candidate): string => $candidate['street'], $lookup['candidates'])));
+        sort($streets);
+        self::assertSame(['Overkant', 'Voorbeeldstraat'], $streets);
+        foreach ($lookup['candidates'] as $candidate) {
+            self::assertArrayNotHasKey('latitude', $candidate);
+            self::assertArrayNotHasKey('longitude', $candidate);
+        }
+
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('unverified', $intake['address']['verification_status']);
+        self::assertSame('address_select', $intake['next_question']['id']);
+        self::assertStringContainsString('Kies het juiste adres', $intake['next_question']['text']);
+        self::assertSame('gps', $intake['address']['source']);
+        self::assertArrayNotHasKey('latitude', $intake['address']);
+        self::assertArrayNotHasKey('longitude', $intake['address']);
+
+        $chosen = null;
+        foreach ($lookup['candidates'] as $candidate) {
+            if ($candidate['street'] === 'Overkant' && $candidate['house_number'] === 14) {
+                $chosen = $candidate;
+                break;
+            }
+        }
+        self::assertNotNull($chosen);
+        $verified = $this->postJson('/api/v1/intakes/'.$intake['id'].'/address-verifications', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'lookup_id' => $lookup['lookup_id'],
+            'candidate_id' => $chosen['candidate_id'],
+            'address_revision' => $lookup['address_revision'],
+            'confirmation_channel' => 'ui',
+        ], 'g-pick');
+        self::assertSame('verified', $verified['address']['verification_status']);
+        self::assertSame('Overkant', $verified['address']['street']);
+        self::assertSame(14, $verified['address']['house_number']);
+    }
+
+    public function testGpsLookupRejectsForeignCoordinatesAndEmptyHintsStayUnverified(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => 0,
+            'client_message_id' => 'gf1',
+            'text' => 'De keukenkraan druppelt sinds gisteren.',
+        ], 'gf-m1', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'gf2',
+            'text' => 'Ik weet het niet',
+        ], 'gf-m2', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+
+        $this->client->jsonRequest(
+            'POST',
+            '/api/v1/intakes/'.$intake['id'].'/address-lookups',
+            ['expected_revision' => $intake['revision'], 'latitude' => 48.8566, 'longitude' => 2.3522],
+            $this->auth($this->tokenA) + ['HTTP_IDEMPOTENCY_KEY' => 'gf-paris'],
+        );
+        self::assertResponseStatusCodeSame(422);
+
+        $empty = $this->postJson('/api/v1/intakes/'.$intake['id'].'/address-lookups', $this->tokenA, [
+            'expected_revision' => $this->getIntake($intake['id'], $this->tokenA)['revision'],
+            'latitude' => 52.090,
+            'longitude' => 5.122,
+            'nearby' => [],
+        ], 'gf-empty');
+        self::assertSame([], $empty['candidates']);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('unverified', $intake['address']['verification_status']);
+        self::assertSame('address_no_match', $intake['next_question']['id']);
+    }
+
     public function testVoiceSessionFakeAndEnglishLanguageSwitch(): void
     {
         $intake = $this->createIntake($this->tokenA);
