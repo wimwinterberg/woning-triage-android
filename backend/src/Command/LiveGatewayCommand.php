@@ -100,11 +100,16 @@ final class LiveGatewayCommand extends Command
         $this->log($output, 'Attached sideband for '.$session->getId());
         $transcript = '';
         $audioChunks = 0;
+        $greeted = false;
         while ($session->isOpen() || $session->getStatus() === VoiceSession::CLOSING) {
             try {
                 $message = $client->receive();
             } catch (ConnectionTimeoutException) {
                 $this->entityManager->refresh($session);
+                if (!$greeted) {
+                    $this->requestGreeting($client, $session, $output);
+                    $greeted = true;
+                }
                 $this->log($output, 'Waiting on '.$session->getId().' status='.$session->getStatus().' transcript_chars='.mb_strlen($transcript));
                 continue;
             } catch (ConnectionClosedException $exception) {
@@ -117,6 +122,10 @@ final class LiveGatewayCommand extends Command
                 continue;
             }
             $type = (string) ($payload['type'] ?? '');
+            if (!$greeted && in_array($type, ['session.started', 'session.updated'], true)) {
+                $this->requestGreeting($client, $session, $output);
+                $greeted = true;
+            }
             if ($type === 'session.output_audio.delta') {
                 ++$audioChunks;
                 continue;
@@ -163,6 +172,12 @@ final class LiveGatewayCommand extends Command
         $intake = $session->getIntake();
         $this->entityManager->refresh($intake);
         $this->log($output, 'delegation '.$delegationId.' transcript_chars='.mb_strlen($transcript).' text='.$this->clip($transcript));
+        $this->sendEvent($client, [
+            'type' => 'session.thinking.append',
+            'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
+            'delegation_id' => $delegationId !== '' ? $delegationId : null,
+            'content' => 'De backend zoekt of werkt het dossier bij. Wacht op het resultaat voordat je verder vraagt.',
+        ]);
         $started = microtime(true);
         if (trim($transcript) !== '') {
             try {
@@ -189,13 +204,41 @@ final class LiveGatewayCommand extends Command
         }
         $next = $intake->document()->nextQuestion['text'] ?? 'Gegevens zijn bijgewerkt.';
         $ms = (int) round((microtime(true) - $started) * 1000);
-        $client->text(json_encode([
+        $this->sendEvent($client, [
             'type' => 'session.commentary.append',
             'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
-            'delegation_id' => $delegationId,
-            'content' => mb_substr($next, 0, 1500),
-        ], JSON_THROW_ON_ERROR));
+            'delegation_id' => $delegationId !== '' ? $delegationId : null,
+            'content' => 'Zeg nu hardop tegen de bewoner, in het Nederlands: '.$next,
+        ]);
         $this->log($output, 'commentary sent in '.$ms.'ms question='.$this->clip($next));
+    }
+
+    private function requestGreeting(WebSocketClient $client, VoiceSession $session, OutputInterface $output): void
+    {
+        $intake = $session->getIntake();
+        $this->entityManager->refresh($intake);
+        $opening = $intake->document()->nextQuestion['text'] ?? 'Wat is er aan de hand in uw huurwoning?';
+        $this->sendEvent($client, [
+            'type' => 'session.instructions.append',
+            'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
+            'delegation_id' => null,
+            'content' => 'Spreek nu Nederlands. Begroet meteen, wacht niet tot de bewoner iets zegt. Dit is een huurwoning; vraag nooit of het huur of koop is. Zeg daarna deze vraag en luister: '.$opening,
+        ]);
+        $this->sendEvent($client, [
+            'type' => 'session.commentary.append',
+            'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
+            'delegation_id' => null,
+            'content' => 'Begin het gesprek nu. Zeg de welkomstvraag hardop.',
+        ]);
+        $this->log($output, 'Requested greeting: '.$this->clip($opening));
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function sendEvent(WebSocketClient $client, array $payload): void
+    {
+        $client->text(json_encode($payload, JSON_THROW_ON_ERROR));
     }
 
     private function log(OutputInterface $output, string $message): void

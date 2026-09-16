@@ -41,7 +41,11 @@ services:
     value: "^https://.*$"
   - key: ADDRESS_PROVIDER
     scope: RUN_TIME
-    value: pdok
+    value: wcs
+  - key: WCS_ADDRESS_API_KEY
+    scope: RUN_TIME
+    type: SECRET
+    value: ""
   - key: OPENAI_API_KEY
     scope: RUN_TIME
     type: SECRET
@@ -78,7 +82,11 @@ workers:
     value: ${db.DATABASE_URL}
   - key: ADDRESS_PROVIDER
     scope: RUN_TIME
-    value: pdok
+    value: wcs
+  - key: WCS_ADDRESS_API_KEY
+    scope: RUN_TIME
+    type: SECRET
+    value: ""
   - key: OPENAI_API_KEY
     scope: RUN_TIME
     type: SECRET

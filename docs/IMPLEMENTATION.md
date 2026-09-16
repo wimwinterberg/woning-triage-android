@@ -20,19 +20,21 @@ Handshake volgens de officiële docs (geen Realtime `/v1/realtime/calls`):
 2. Backend `POST https://api.openai.com/v1/live/sessions` met `delegation.type=client` en `transport.type=webrtc`.
 3. Android past `transport.sdp` toe als answer.
 4. Worker `woningtriage:live-gateway` koppelt een sideband op `wss://api.openai.com/v1/live/sessions/{id}/attach`.
-5. Bij `session.delegation.created` analyseert de backend het dossier en stuurt `session.commentary.append`.
+5. Na `session.started` stuurt de worker een begroeting (`session.instructions.append` + `session.commentary.append`) zodat GPT-Live meteen spreekt.
+6. Bij `session.delegation.created` analyseert de backend het dossier en stuurt `session.commentary.append` met de volgende vraag om hardop te zeggen.
    Sideband-frames worden gelezen via `Message::getContent()` (niet `(string)$message`; dat is de classnaam).
 
 Zonder `OPENAI_API_KEY` blijft tekstintake werken. Een fake SDP is geen live-bewijs; de API zet `live: false` en de app past het antwoord niet toe. `APP_ENV=dev` (Docker) forceert de fake **niet** als de key gezet is. De live-gateway slaat `prov_fake_*`-sessies over en blijft idle zonder skip-spam. Na een nieuwe key: `docker compose --profile live up --force-recreate`.
 
-Gespreksprompt: `App\Live\ConversationPrompt` (versie `conversation-v1`). Analyzer: deterministische heuristic voor CI/demo; geen verzonnen oorzaak.
+Gespreksprompt: `App\Live\ConversationPrompt` (versie `conversation-v2`), Nederlands, alleen huurwoningen, begroet meteen. Analyzer: deterministische heuristic voor CI/demo; geen verzonnen oorzaak.
 
 ## Adres (OPEN-10)
 
 Providerinterface met:
 
-- **PDOK Locatieserver v3.1** (`/free`, `fq=type:adres`) — officiële Nederlandse BAG-zoekdienst, geen API-key.
-- **FakeAddressProvider** voor tests en lokale demo. Resultaten zijn fictief (`Voorbeeldstraat`) en mogen niet als live BAG worden gepresenteerd.
+- **We Create Solutions Address API** (`GET https://address-api.createsolutions.dev/v1/postcode/{postalCode}/{houseNumber}`, Bearer `WCS_ADDRESS_API_KEY`). 200 geeft kandidaten; 404 is een lege lijst; 401/429/503/500 is `address_lookup_unavailable`. Meerdere units komen via `houseLetter` / `houseNumberAddition` / `unitNumber`. Fake-resultaten (`Voorbeeldstraat`) mogen niet als live BAG worden gepresenteerd.
+- **PDOK Locatieserver v3.1** als fallback (`ADDRESS_PROVIDER=pdok`).
+- **FakeAddressProvider** alleen in tests (`when@test`). Docker/dev gebruikt WCS (`ADDRESS_PROVIDER=wcs`). Zet `WCS_ADDRESS_API_KEY` in `backend/.env` (niet alleen `.env.local`) en recreate: `docker compose --profile live up --force-recreate`.
 
 ## Beslisboom
 

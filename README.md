@@ -23,6 +23,7 @@ Een zelfstandige Android-app die bewoners via een gesproken of getypt gesprek he
 - PHP 8.4, Composer, PostgreSQL 16 **of** Docker Compose
 - JDK 17, Android SDK (compileSdk 35) voor de app
 - Optioneel: `OPENAI_API_KEY` met GPT-Live-toegang
+- Optioneel: `WCS_ADDRESS_API_KEY` voor live postcode-lookup (We Create Solutions)
 
 ## Backend starten met Docker
 
@@ -43,7 +44,9 @@ docker compose exec api php bin/console woningtriage:create-user --label=pilot
 
 Spraak (GPT-Live) vereist `OPENAI_API_KEY` in `backend/.env` (Compose leest dat bestand; `.env.local` alleen is niet genoeg). Zonder key blijft **typen** werken. De worker blijft idle en logt geen `Skipping voice_…`. De app past geen fake-SDP toe, zodat WebRTC niet crasht op m-line-volgorde.
 
-Na het zetten of wijzigen van de key containers opnieuw aanmaken:
+Adreslookup gebruikt de We Create Solutions Address API. Zet `WCS_ADDRESS_API_KEY` in hetzelfde `backend/.env`. Zonder key geeft een echte postcode `503` (niet een nepstraat). CI gebruikt de fake provider.
+
+Na het zetten of wijzigen van keys containers opnieuw aanmaken:
 
 ```bash
 cd backend
@@ -188,7 +191,7 @@ De API is deploybaar op App Platform (PHP-buildpack, document root `public/`, ma
 | Idempotentie, eigendom, geen `planning_duration` in API/report | Getest |
 | Nederlandse opening / Engelse zin / “okay” | Heuristic analyzer + API-test |
 | GPT-Live WebRTC end-to-end | **Niet live bewezen** zonder account |
-| PDOK live lookup | Geïmplementeerd; CI gebruikt fake |
+| WCS Address API lookup | Geïmplementeerd (gemockte HTTP-tests); live niet bewezen zonder key |
 | Productieboom 53 MB | Ontbreekt; fixture + importer aanwezig |
 | Spoedbeleid / echte medewerker | Open (OPEN-02); demo claimt geen inschakeling |
 

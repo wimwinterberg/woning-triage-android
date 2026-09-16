@@ -1,6 +1,8 @@
 package nl.woningtriage.app.voice
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
@@ -33,6 +35,7 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
     private var audioTrack: AudioTrack? = null
     private var audioSource: AudioSource? = null
     private var audioDeviceModule: JavaAudioDeviceModule? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
     private var observer: ConnectionObserver? = null
     override var isSendingAudio: Boolean = false
         private set
@@ -43,7 +46,11 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
             PeerConnectionFactory.InitializationOptions.builder(context).createInitializationOptions(),
         )
         val egl = EglBase.create()
-        audioDeviceModule = JavaAudioDeviceModule.builder(context).createAudioDeviceModule()
+        audioDeviceModule = JavaAudioDeviceModule.builder(context)
+            .setUseHardwareAcousticEchoCanceler(true)
+            .setUseHardwareNoiseSuppressor(true)
+            .createAudioDeviceModule()
+            .also { it.setSpeakerMute(false) }
         factory = PeerConnectionFactory.builder()
             .setAudioDeviceModule(audioDeviceModule)
             .setVideoEncoderFactory(DefaultVideoEncoderFactory(egl.eglBaseContext, true, true))
@@ -63,15 +70,14 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
         awaitSet { sdpObserver -> peerConnection?.setLocalDescription(sdpObserver, offer) }
         withTimeoutOrNull(8_000) { observer?.iceComplete?.await() }
         isSendingAudio = true
-        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-        audioManager.isSpeakerphoneOn = true
+        routePlaybackLoud()
         return peerConnection?.localDescription?.description ?: offer.description
     }
 
     override suspend fun applyRemoteAnswer(sdpAnswer: String) {
         val answer = SessionDescription(SessionDescription.Type.ANSWER, sdpAnswer)
         awaitSet { sdpObserver -> peerConnection?.setRemoteDescription(sdpObserver, answer) }
+        routePlaybackLoud()
     }
 
     override fun setMuted(muted: Boolean) {
@@ -94,7 +100,33 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
         factory = null
         audioDeviceModule = null
         observer = null
+        releasePlayback()
+    }
+
+    private fun routePlaybackLoud() {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build(),
+            )
+            .setAcceptsDelayedFocusGain(false)
+            .build()
+        audioFocusRequest = request
+        audioManager.requestAudioFocus(request)
+        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+        audioManager.isSpeakerphoneOn = true
+        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
+        runCatching { audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, max, 0) }
+        audioDeviceModule?.setSpeakerMute(false)
+    }
+
+    private fun releasePlayback() {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        audioFocusRequest?.let { runCatching { audioManager.abandonAudioFocusRequest(it) } }
+        audioFocusRequest = null
         audioManager.mode = AudioManager.MODE_NORMAL
         audioManager.isSpeakerphoneOn = false
     }
@@ -137,12 +169,21 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
         }
         override fun onIceCandidate(candidate: IceCandidate?) {}
         override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>?) {}
-        override fun onAddStream(stream: MediaStream?) {}
+        override fun onAddStream(stream: MediaStream?) {
+            stream?.audioTracks?.forEach { track ->
+                track.setEnabled(true)
+                track.setVolume(10.0)
+            }
+        }
         override fun onRemoveStream(stream: MediaStream?) {}
         override fun onDataChannel(channel: DataChannel?) {}
         override fun onRenegotiationNeeded() {}
         override fun onAddTrack(receiver: RtpReceiver?, streams: Array<out MediaStream>?) {
-            receiver?.track()?.setEnabled(true)
+            val track = receiver?.track() ?: return
+            track.setEnabled(true)
+            if (track is AudioTrack) {
+                track.setVolume(10.0)
+            }
         }
     }
 }

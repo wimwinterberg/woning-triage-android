@@ -12,9 +12,10 @@ services:
       DEFAULT_URI: http://localhost:8000
       DATABASE_URL: postgresql://${POSTGRES_USER:-woningtriage}:${POSTGRES_PASSWORD:-woningtriage}@database:5432/${POSTGRES_DB:-woningtriage}?serverVersion=16&charset=utf8
       CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN:-^https?://(localhost|127\\.0\\.0\\.1)(:[0-9]+)?$$|^https://[a-z0-9.-]+\\.ngrok(-free)?\\.(app|dev|io)$$}
-      ADDRESS_PROVIDER: ${ADDRESS_PROVIDER:-fake}
-      # Interpolated from backend/.env (not .env.local). Recreate after changing the key.
+      ADDRESS_PROVIDER: ${ADDRESS_PROVIDER:-wcs}
+      # Interpolated from backend/.env (not .env.local). Recreate after changing keys.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      WCS_ADDRESS_API_KEY: ${WCS_ADDRESS_API_KEY:-}
       OPENAI_LIVE_MODEL: ${OPENAI_LIVE_MODEL:-gpt-live-1}
       MESSENGER_TRANSPORT_DSN: doctrine://default?auto_setup=0
     volumes:
@@ -46,9 +47,10 @@ services:
       APP_DEBUG: ${APP_DEBUG:-1}
       APP_SECRET: ${APP_SECRET:-change-me}
       DATABASE_URL: postgresql://${POSTGRES_USER:-woningtriage}:${POSTGRES_PASSWORD:-woningtriage}@database:5432/${POSTGRES_DB:-woningtriage}?serverVersion=16&charset=utf8
-      ADDRESS_PROVIDER: ${ADDRESS_PROVIDER:-fake}
-      # Same backend/.env interpolation as api. Recreate after changing the key.
+      ADDRESS_PROVIDER: ${ADDRESS_PROVIDER:-wcs}
+      # Same backend/.env interpolation as api. Recreate after changing keys.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      WCS_ADDRESS_API_KEY: ${WCS_ADDRESS_API_KEY:-}
       OPENAI_LIVE_MODEL: ${OPENAI_LIVE_MODEL:-gpt-live-1}
       SKIP_RELEASE: "1"
     volumes:

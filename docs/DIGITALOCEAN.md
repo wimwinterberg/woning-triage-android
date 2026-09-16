@@ -26,7 +26,9 @@ Android zit niet in deze deploy. Bouw de APK lokaal met `-PBACKEND_URL=https://<
 
 4. Controleer dat elk component `source_dir: backend` heeft, zodat de PHP-buildpack `composer.json` en de `Procfile` vindt.
 
-5. Na de eerste deploy: `OPENAI_API_KEY` invullen in de app-settings als je GPT-Live wilt. Zonder key blijft tekstintake werken; de worker blijft idle.
+5. Na de eerste deploy secrets invullen in de app-settings:
+   - `WCS_ADDRESS_API_KEY` — We Create Solutions Address API (postcode-lookup). Zonder key geven adresopzoekingen `503`.
+   - `OPENAI_API_KEY` — GPT-Live. Zonder key blijft tekstintake werken; de worker blijft idle.
 
 6. Maak een activatiecode via **App Platform → jouw app → Console** (component `api`):
 
@@ -48,6 +50,8 @@ De spec zet deze al. Controleer ze in het control panel:
 | `DATABASE_URL` | `${db.DATABASE_URL}` (managed PostgreSQL, inclusief `sslmode=require`) |
 | `DEFAULT_URI` | `${api.PUBLIC_URL}` |
 | `CORS_ALLOW_ORIGIN` | `^https://.*$` (native Android gebruikt geen CORS) |
+| `ADDRESS_PROVIDER` | `wcs` |
+| `WCS_ADDRESS_API_KEY` | Address API-sleutel (secret; leeg = adreslookup `503`) |
 
 Doctrine pinnet PostgreSQL **16** in `config/packages/doctrine.yaml`, zodat de DigitalOcean-URL geen `serverVersion` hoeft te bevatten.
 

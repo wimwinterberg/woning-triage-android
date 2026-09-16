@@ -1,9 +1,11 @@
 # yaml-language-server: $schema=../vendor/symfony/dependency-injection/Loader/schema/services.schema.json
 parameters:
     app.tree_dir: '%kernel.project_dir%/config/trees'
-    app.prompt_version: 'conversation-v1'
+    app.prompt_version: 'conversation-v2'
     app.live_model: 'gpt-live-1'
     env(OPENAI_API_KEY): ''
+    env(WCS_ADDRESS_API_KEY): ''
+    env(ADDRESS_PROVIDER): 'wcs'
 
 services:
     _defaults:
@@ -50,15 +52,20 @@ services:
             $apiKey: '%env(default::OPENAI_API_KEY)%'
 
     App\Analyzer\IntakeAnalyzer: '@App\Analyzer\HeuristicIntakeAnalyzer'
-    App\Address\AddressProvider: '@App\Address\PdokAddressProvider'
     App\Address\FakeAddressProvider:
         public: true
+    App\Address\WcsAddressProvider:
+        arguments:
+            $apiKey: '%env(default::WCS_ADDRESS_API_KEY)%'
+    App\Address\AddressProvider:
+        factory: ['App\Address\AddressProviderFactory', 'create']
+        arguments:
+            $wcs: '@App\Address\WcsAddressProvider'
+            $pdok: '@App\Address\PdokAddressProvider'
+            $fake: '@App\Address\FakeAddressProvider'
+            $name: '%env(default::ADDRESS_PROVIDER)%'
 
 when@test:
     services:
         App\Live\GptLiveClient: '@App\Live\FakeGptLiveClient'
-        App\Address\AddressProvider: '@App\Address\FakeAddressProvider'
-
-when@dev:
-    services:
         App\Address\AddressProvider: '@App\Address\FakeAddressProvider'
