@@ -115,6 +115,11 @@ class VoiceSession
         $this->sdpAnswer = null;
     }
 
+    public function getCloseReason(): ?string
+    {
+        return $this->closeReason;
+    }
+
     public function fail(string $reason): void
     {
         $this->status = self::FAILED;

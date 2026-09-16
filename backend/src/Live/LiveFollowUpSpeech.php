@@ -63,30 +63,36 @@ final class LiveFollowUpSpeech
         return 'There is no new resident answer yet. Do not ask a new question; wait until the resident speaks.';
     }
 
-    public static function idlePrompt(string $language): string
+    public static function idlePromptSpoken(string $language): string
     {
-        $spoken = match (true) {
+        return match (true) {
             str_starts_with($language, 'de') => 'Sind Sie noch da? Ich warte auf Ihre Antwort.',
             str_starts_with($language, 'tr') => 'Hâlâ orada mısınız? Cevabınızı bekliyorum.',
             str_starts_with($language, 'ja') => 'まだいらっしゃいますか。返答をお待ちしています。',
             str_starts_with($language, 'en') => 'Are you still there? I am waiting for your answer.',
             default => 'Bent u er nog? Ik wacht op uw antwoord.',
         };
-
-        return self::sayExactly($spoken, $language);
     }
 
-    public static function idleClosing(string $language): string
+    public static function idleClosingSpoken(string $language): string
     {
-        $spoken = match (true) {
+        return match (true) {
             str_starts_with($language, 'de') => 'Es bleibt still. Ich beende das Gespräch jetzt. Sie können später weitermachen.',
             str_starts_with($language, 'tr') => 'Sessiz kaldı. Görüşmeyi şimdi kapatıyorum. Daha sonra devam edebilirsiniz.',
             str_starts_with($language, 'ja') => '応答がないため、会話を終了します。後から続けられます。',
             str_starts_with($language, 'en') => 'It has gone quiet, so I am closing the conversation now. You can continue later.',
             default => 'Het blijft stil, daarom sluit ik het gesprek nu. U kunt later verdergaan.',
         };
+    }
 
-        return self::sayExactly($spoken, $language);
+    public static function idlePrompt(string $language): string
+    {
+        return self::sayExactly(self::idlePromptSpoken($language), $language);
+    }
+
+    public static function idleClosing(string $language): string
+    {
+        return self::sayExactly(self::idleClosingSpoken($language), $language);
     }
 
     private static function sayExactly(string $spoken, string $language): string

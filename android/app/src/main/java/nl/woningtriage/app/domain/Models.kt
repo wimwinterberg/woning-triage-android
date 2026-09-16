@@ -18,6 +18,7 @@ data class Intake(
     val risk: Risk = Risk(),
     @SerialName("next_question") val nextQuestion: NextQuestion? = null,
     @SerialName("spoken_follow_up") val spokenFollowUp: String? = null,
+    @SerialName("idle_notice") val idleNotice: String? = null,
     val summary: Summary? = null,
     val address: AddressState? = null,
     @SerialName("report_id") val reportId: String? = null,
@@ -25,6 +26,14 @@ data class Intake(
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("confirmed_at") val confirmedAt: String? = null,
+    val voice: IntakeVoice? = null,
+)
+
+@Serializable
+data class IntakeVoice(
+    @SerialName("session_id") val sessionId: String? = null,
+    val status: String? = null,
+    @SerialName("close_reason") val closeReason: String? = null,
 )
 
 @Serializable
@@ -114,6 +123,7 @@ data class VoiceSession(
     @SerialName("sdp_answer") val sdpAnswer: String? = null,
     @SerialName("expires_at") val expiresAt: String? = null,
     val live: Boolean = false,
+    @SerialName("close_reason") val closeReason: String? = null,
 )
 
 @Serializable

@@ -431,6 +431,10 @@ final class IntakeApiTest extends WebTestCase
         self::assertSame('webrtc', $session['transport']);
         self::assertNotSame('', $session['sdp_answer']);
         self::assertFalse($session['live']);
+        $shown = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame($session['id'], $shown['voice']['session_id'] ?? null);
+        self::assertContains($shown['voice']['status'] ?? '', ['connecting', 'active']);
+        self::assertNull($shown['idle_notice']);
         $queue = static::getContainer()->get(\App\Live\LiveGatewayCommandQueue::class);
         self::assertNotContains($session['id'], $queue->pending());
 
@@ -452,6 +456,10 @@ final class IntakeApiTest extends WebTestCase
 
         $stopped = $this->postJson('/api/v1/intakes/'.$intake['id'].'/voice-sessions/'.$session['id'].'/stop', $this->tokenA, [], 'voice-stop', 202);
         self::assertSame('closed', $stopped['status']);
+        self::assertSame('user_stop', $stopped['close_reason']);
+        $shown = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('closed', $shown['voice']['status'] ?? null);
+        self::assertSame('user_stop', $shown['voice']['close_reason'] ?? null);
         $queue = static::getContainer()->get(\App\Live\LiveGatewayCommandQueue::class);
         self::assertNotContains($session['id'], $queue->pending());
     }

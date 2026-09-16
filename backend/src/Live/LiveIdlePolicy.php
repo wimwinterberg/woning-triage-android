@@ -25,8 +25,14 @@ final class LiveIdlePolicy
     {
         $prompt = (int) $promptSeconds;
         $close = (int) $closeSeconds;
+        if ($prompt < 1) {
+            $prompt = 60;
+        }
+        if ($close <= $prompt) {
+            $close = $prompt + 120;
+        }
 
-        return new self($prompt > 0 ? $prompt : 60, $close > $prompt ? $close : 180);
+        return new self($prompt, $close);
     }
 
     /**

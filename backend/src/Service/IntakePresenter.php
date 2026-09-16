@@ -7,6 +7,7 @@ namespace App\Service;
 use App\Entity\AnalysisTask;
 use App\Entity\Intake;
 use App\Entity\IntakeMessage;
+use App\Entity\VoiceSession;
 use Doctrine\ORM\EntityManagerInterface;
 
 final class IntakePresenter
@@ -69,6 +70,7 @@ final class IntakePresenter
             'risk' => $document->risk,
             'next_question' => $document->nextQuestion,
             'spoken_follow_up' => $document->spokenFollowUp,
+            'idle_notice' => $document->idleNotice,
             'summary' => $document->summary,
             'address' => $address,
             'report_id' => $intake->getReportId(),
@@ -76,11 +78,34 @@ final class IntakePresenter
             'created_at' => $intake->getCreatedAt()->setTimezone(new \DateTimeZone('UTC'))->format(DATE_ATOM),
             'updated_at' => $intake->getUpdatedAt()->setTimezone(new \DateTimeZone('UTC'))->format(DATE_ATOM),
             'confirmed_at' => $intake->getConfirmedAt()?->setTimezone(new \DateTimeZone('UTC'))->format(DATE_ATOM),
+            'voice' => $this->presentVoice($intake),
         ];
 
         $this->assertNoPlanningDuration($payload);
 
         return $payload;
+    }
+
+    /**
+     * @return array{session_id: string, status: string, close_reason: ?string}|null
+     */
+    private function presentVoice(Intake $intake): ?array
+    {
+        $session = $this->entityManager->createQuery(
+            'SELECT v FROM App\\Entity\\VoiceSession v WHERE v.intake = :i ORDER BY v.createdAt DESC'
+        )
+            ->setParameter('i', $intake)
+            ->setMaxResults(1)
+            ->getOneOrNullResult();
+        if (!$session instanceof VoiceSession) {
+            return null;
+        }
+
+        return [
+            'session_id' => $session->getId(),
+            'status' => $session->getStatus(),
+            'close_reason' => $session->getCloseReason(),
+        ];
     }
 
     /**

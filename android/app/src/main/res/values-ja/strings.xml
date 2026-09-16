@@ -33,6 +33,7 @@
     <string name="mic_off">マイクオフ</string>
     <string name="processing">処理中</string>
     <string name="disconnected">切断</string>
+    <string name="idle_closed">無応答のため会話を終了しました</string>
     <string name="confirm">確認</string>
     <string name="adjust">修正</string>
     <string name="work_description">担当者向けの説明</string>

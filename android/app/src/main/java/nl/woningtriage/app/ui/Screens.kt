@@ -636,5 +636,6 @@ private fun statusLabel(state: AppUiState): String = when (state.connectionLabel
     "connected" -> stringResource(R.string.connected)
     "mic_off" -> stringResource(R.string.mic_off)
     "processing" -> stringResource(R.string.processing)
+    "idle_closed" -> stringResource(R.string.idle_closed)
     else -> stringResource(R.string.disconnected)
 }

@@ -345,6 +345,9 @@ class AppViewModel(
             val opening = _state.value.intake?.nextQuestion?.text.orEmpty()
             voice.requestOpeningGreeting(opening)
             voice.setOnConnectionLost {
+                if (_state.value.connectionLabel == "idle_closed") {
+                    return@setOnConnectionLost
+                }
                 if (_state.value.voiceConnected) {
                     _state.value = _state.value.copy(
                         voiceConnected = false,
@@ -406,6 +409,9 @@ class AppViewModel(
         intake.spokenFollowUp?.takeIf { it.isNotBlank() && transcript.none { line -> line.text == it } }?.let {
             transcript += TranscriptLine("assistant", it)
         }
+        intake.idleNotice?.takeIf { it.isNotBlank() && transcript.none { line -> line.text == it } }?.let {
+            transcript += TranscriptLine("assistant", it)
+        }
         if (question != null && transcript.none { it.speaker == "assistant" && it.text == question }) {
             transcript += TranscriptLine("assistant", question)
         }
@@ -417,11 +423,21 @@ class AppViewModel(
             current = _state.value.screen,
             stayInVoiceConversation = stayInVoice,
         )
+        val idleClosed = isIdleTimeoutClose(intake.voice?.closeReason)
+        if (idleClosed && (_state.value.voiceConnected || _state.value.connectionLabel != "idle_closed")) {
+            runCatching { voice.stop() }
+        }
         _state.value = _state.value.copy(
             intake = intake,
             transcript = transcript,
             screen = screen,
-            connectionLabel = if (_state.value.busy) "processing" else _state.value.connectionLabel,
+            voiceConnected = if (idleClosed) false else _state.value.voiceConnected,
+            voiceSessionId = if (idleClosed) null else _state.value.voiceSessionId,
+            connectionLabel = when {
+                idleClosed -> "idle_closed"
+                _state.value.busy -> "processing"
+                else -> _state.value.connectionLabel
+            },
             uiLocale = UiLocale.fromConversation(intake.conversationLanguage),
         )
         if (screen == Screen.Completed || screen == Screen.ReviewRequired) {
@@ -474,6 +490,8 @@ class AppViewModel(
             }
     }
 }
+
+internal fun isIdleTimeoutClose(closeReason: String?): Boolean = closeReason == "idle_timeout"
 
 internal fun completedLedoCount(intake: Intake): Int =
     listOf("location", "element", "defect", "cause").count { key ->

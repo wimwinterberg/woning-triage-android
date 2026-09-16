@@ -33,6 +33,7 @@
     <string name="mic_off">Microphone off</string>
     <string name="processing">Processing</string>
     <string name="disconnected">Disconnected</string>
+    <string name="idle_closed">Conversation closed after silence</string>
     <string name="confirm">Confirm</string>
     <string name="adjust">Edit</string>
     <string name="work_description">Description for the staff member</string>

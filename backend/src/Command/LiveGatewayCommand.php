@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Command;
 
 use App\Address\WcsAddressProvider;
+use App\Entity\Intake;
 use App\Entity\VoiceSession;
 use App\Live\GptLiveClient;
 use App\Live\LiveGatewayCommandQueue;
 use App\Live\LiveGreeting;
 use App\Live\LiveIdlePolicy;
 use App\Live\SidebandPayload;
+use App\Service\IntakeEventPublisher;
 use App\Service\IntakeService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -38,6 +40,7 @@ final class LiveGatewayCommand extends Command
         private readonly LiveGatewayCommandQueue $queue,
         private readonly EntityManagerInterface $entityManager,
         private readonly IntakeService $intakeService,
+        private readonly IntakeEventPublisher $events,
         private readonly GptLiveClient $gptLiveClient,
         #[Autowire('%env(default::OPENAI_API_KEY)%')]
         private readonly ?string $apiKey,
@@ -164,9 +167,8 @@ final class LiveGatewayCommand extends Command
                 if ($type === 'session.output_audio.delta') {
                     ++$audioChunks;
                 }
-                if (in_array($type, ['session.input_audio.append', 'session.input_audio.delta'], true)) {
-                    $this->markResidentActivity($lastResidentAt, $idlePrompted);
-                }
+                // Ambient mic frames are not resident activity. Counting them would
+                // keep a paid GPT-Live session open forever.
                 continue;
             }
             if ($type === 'session.input_transcript.delta') {
@@ -371,6 +373,8 @@ final class LiveGatewayCommand extends Command
         $language = $intake->getConversationLanguage();
         if ($action === LiveIdlePolicy::PROMPT) {
             $idlePrompted = true;
+            $spoken = \App\Live\LiveFollowUpSpeech::idlePromptSpoken($language);
+            $this->persistIdleNotice($intake, $spoken);
             $this->sendEvent($client, [
                 'type' => 'session.commentary.append',
                 'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
@@ -382,6 +386,8 @@ final class LiveGatewayCommand extends Command
             return false;
         }
 
+        $spoken = \App\Live\LiveFollowUpSpeech::idleClosingSpoken($language);
+        $this->persistIdleNotice($intake, $spoken);
         $this->sendEvent($client, [
             'type' => 'session.commentary.append',
             'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
@@ -395,6 +401,15 @@ final class LiveGatewayCommand extends Command
         return true;
     }
 
+    private function persistIdleNotice(Intake $intake, string $notice): void
+    {
+        $this->entityManager->refresh($intake);
+        $document = $intake->document();
+        $document->idleNotice = $notice;
+        $intake->replaceDocument($document);
+        $this->entityManager->flush();
+    }
+
     private function closeIdleSession(VoiceSession $session, OutputInterface $output): void
     {
         $providerId = $session->getProviderSessionId();
@@ -402,6 +417,11 @@ final class LiveGatewayCommand extends Command
             $this->gptLiveClient->closeSession($providerId);
         }
         $session->close('idle_timeout', true);
+        $this->events->publish($session->getIntake(), 'voice_session.updated', [
+            'voice_session_id' => $session->getId(),
+            'status' => $session->getStatus(),
+            'close_reason' => 'idle_timeout',
+        ]);
         $this->entityManager->flush();
         $this->log($output, 'Closed '.$session->getId().' after idle timeout');
     }

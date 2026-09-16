@@ -34,6 +34,7 @@ final class IntakeDocument
         public ?string $pendingAddressQuestionId = null,
         public ?string $pendingSummaryQuestionId = null,
         public ?string $spokenFollowUp = null,
+        public ?string $idleNotice = null,
     ) {
     }
 
@@ -83,6 +84,9 @@ final class IntakeDocument
             spokenFollowUp: isset($data['spoken_follow_up']) && is_string($data['spoken_follow_up']) && $data['spoken_follow_up'] !== ''
                 ? $data['spoken_follow_up']
                 : null,
+            idleNotice: isset($data['idle_notice']) && is_string($data['idle_notice']) && $data['idle_notice'] !== ''
+                ? $data['idle_notice']
+                : null,
         );
     }
 
@@ -110,6 +114,7 @@ final class IntakeDocument
             'pending_address_question_id' => $this->pendingAddressQuestionId,
             'pending_summary_question_id' => $this->pendingSummaryQuestionId,
             'spoken_follow_up' => $this->spokenFollowUp,
+            'idle_notice' => $this->idleNotice,
         ];
     }
 

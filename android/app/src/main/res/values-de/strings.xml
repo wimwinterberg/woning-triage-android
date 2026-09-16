@@ -33,6 +33,7 @@
     <string name="mic_off">Mikrofon aus</string>
     <string name="processing">Daten werden verarbeitet</string>
     <string name="disconnected">Getrennt</string>
+    <string name="idle_closed">Gespräch wegen Stille beendet</string>
     <string name="confirm">Bestätigen</string>
     <string name="adjust">Ändern</string>
     <string name="work_description">Beschreibung für den Mitarbeiter</string>

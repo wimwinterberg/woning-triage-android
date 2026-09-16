@@ -95,4 +95,13 @@ final class IntakeDocumentTest extends TestCase
         self::assertNull($document->pendingAddressQuestionId);
         self::assertSame($revision + 1, $document->address['address_revision']);
     }
+
+    public function testIdleNoticeRoundtripsWithoutTouchingSpokenFollowUp(): void
+    {
+        $document = IntakeDocument::initial(['id' => 'opening', 'text' => 'Wat is er aan de hand?']);
+        $document->idleNotice = 'Bent u er nog? Ik wacht op uw antwoord.';
+        $copy = IntakeDocument::fromArray($document->toArray());
+        self::assertSame('Bent u er nog? Ik wacht op uw antwoord.', $copy->idleNotice);
+        self::assertNull($copy->spokenFollowUp);
+    }
 }

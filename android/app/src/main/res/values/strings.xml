@@ -33,6 +33,7 @@
     <string name="mic_off">Microfoon uit</string>
     <string name="processing">Gegevens verwerken</string>
     <string name="disconnected">Verbinding verbroken</string>
+    <string name="idle_closed">Gesprek gesloten wegens stilte</string>
     <string name="confirm">Bevestigen</string>
     <string name="adjust">Aanpassen</string>
     <string name="work_description">Omschrijving voor de medewerker</string>

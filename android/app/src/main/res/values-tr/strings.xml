@@ -33,6 +33,7 @@
     <string name="mic_off">Mikrofon kapalı</string>
     <string name="processing">Veriler işleniyor</string>
     <string name="disconnected">Bağlantı kesildi</string>
+    <string name="idle_closed">Sessizlik nedeniyle görüşme kapatıldı</string>
     <string name="confirm">Onayla</string>
     <string name="adjust">Düzenle</string>
     <string name="work_description">Personel için açıklama</string>

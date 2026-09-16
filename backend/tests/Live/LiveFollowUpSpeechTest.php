@@ -58,6 +58,7 @@ final class LiveFollowUpSpeechTest extends TestCase
         $text = LiveFollowUpSpeech::idlePrompt('nl-NL');
         self::assertStringContainsString('Bent u er nog?', $text);
         self::assertStringContainsString('Say this exactly', $text);
+        self::assertSame('Bent u er nog? Ik wacht op uw antwoord.', LiveFollowUpSpeech::idlePromptSpoken('nl-NL'));
     }
 
     public function testIdleClosingAnnouncesShutdown(): void
@@ -65,5 +66,9 @@ final class LiveFollowUpSpeechTest extends TestCase
         $text = LiveFollowUpSpeech::idleClosing('en-GB');
         self::assertStringContainsString('closing the conversation', $text);
         self::assertStringContainsString('Speak only English', $text);
+        self::assertSame(
+            'It has gone quiet, so I am closing the conversation now. You can continue later.',
+            LiveFollowUpSpeech::idleClosingSpoken('en-GB'),
+        );
     }
 }

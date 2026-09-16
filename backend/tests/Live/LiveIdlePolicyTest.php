@@ -26,5 +26,9 @@ final class LiveIdlePolicyTest extends TestCase
         $policy = LiveIdlePolicy::fromEnv('0', 'bad');
         self::assertSame(60, $policy->promptAfterSeconds());
         self::assertSame(180, $policy->closeAfterSeconds());
+
+        $policy = LiveIdlePolicy::fromEnv('90', '10');
+        self::assertSame(90, $policy->promptAfterSeconds());
+        self::assertSame(210, $policy->closeAfterSeconds());
     }
 }

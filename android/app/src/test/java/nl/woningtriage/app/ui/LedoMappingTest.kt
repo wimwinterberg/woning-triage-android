@@ -30,3 +30,12 @@ class FakeVoiceMuteTest {
         assertFalse(voice.isSendingAudio)
     }
 }
+
+class IdleTimeoutLabelTest {
+    @Test
+    fun idleTimeoutReasonClosesPaidSession() {
+        assert(isIdleTimeoutClose("idle_timeout"))
+        assertFalse(isIdleTimeoutClose("user_stop"))
+        assertFalse(isIdleTimeoutClose(null))
+    }
+}
