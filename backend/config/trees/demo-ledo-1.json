@@ -97,8 +97,8 @@
       "target": "address",
       "semantic": "Wat is de postcode en het huisnummer van de woning?",
       "texts": {
-        "nl-NL": "Wat is de postcode en het huisnummer van de woning? Een Nederlandse postcode heeft vier cijfers en twee letters; letters mag u spellen, zoals Simon Johan voor SJ.",
-        "en-GB": "What is the postcode and house number of the home? A Dutch postcode is four digits and two letters; you may spell the letters, for example Simon Johan for SJ."
+        "nl-NL": "Wat is de postcode en het huisnummer van de woning?",
+        "en-GB": "What is the postcode and house number of the home?"
       },
       "answer_types": ["address"],
       "unknown_allowed": false,

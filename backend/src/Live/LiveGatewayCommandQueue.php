@@ -36,10 +36,12 @@ final class LiveGatewayCommandQueue
              WHERE v.status IN (:statuses)
                AND v.providerSessionId IS NOT NULL
                AND v.providerSessionId NOT LIKE :fakePrefix
-             ORDER BY v.createdAt ASC'
+               AND v.expiresAt > :now
+             ORDER BY v.createdAt DESC'
         )
             ->setParameter('statuses', [VoiceSession::CONNECTING, VoiceSession::ACTIVE])
             ->setParameter('fakePrefix', 'prov_fake_%')
+            ->setParameter('now', new \DateTimeImmutable('now', new \DateTimeZone('UTC')))
             ->getSingleColumnResult();
 
         return $ids;

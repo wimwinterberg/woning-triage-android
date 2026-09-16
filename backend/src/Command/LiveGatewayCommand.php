@@ -95,9 +95,18 @@ final class LiveGatewayCommand extends Command
         $client->addHeader('OpenAI-Beta', 'live=v1');
         $client->addMiddleware(new CloseHandler());
         $client->addMiddleware(new PingResponder());
-        $client->setTimeout(1);
         $this->log($output, 'Connecting sideband '.$session->getId().' provider='.$session->getProviderSessionId());
-        $client->connect();
+        $client->setTimeout(8);
+        try {
+            $client->connect();
+        } catch (\Throwable $exception) {
+            $this->log($output, 'Sideband connect failed for '.$session->getId().': '.$exception->getMessage());
+            $session->fail('sideband_connect');
+            $this->entityManager->flush();
+
+            return;
+        }
+        $client->setTimeout(1);
         $this->log($output, 'Attached sideband for '.$session->getId());
         $transcript = '';
         $audioChunks = 0;

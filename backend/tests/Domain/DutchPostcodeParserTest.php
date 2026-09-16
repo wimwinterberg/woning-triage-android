@@ -72,6 +72,20 @@ final class DutchPostcodeParserTest extends TestCase
         self::assertNull($parsed['house_number']);
     }
 
+    public function testParsesZeventigAsZevenDrieWhenTwoUnitsPrecedeIt(): void
+    {
+        $parsed = DutchPostcodeParser::parse('Drie vijf zeventig Simon Johan in Utrecht');
+        self::assertSame('3573 SJ', $parsed['postcode']);
+        self::assertNull($parsed['house_number']);
+    }
+
+    public function testParsesSpokenHouseNumberHundreds(): void
+    {
+        $parsed = DutchPostcodeParser::parse('Drie vijf zeventig Simon Johan, tweehonderd zeven');
+        self::assertSame('3573 SJ', $parsed['postcode']);
+        self::assertSame(207, $parsed['house_number']);
+    }
+
     public function testParsesCompoundSpokenTens(): void
     {
         $parsed = DutchPostcodeParser::parse('vijfendertig drieënzeventig simon johan huisnummer twaalf');

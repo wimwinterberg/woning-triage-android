@@ -134,54 +134,158 @@ final class DutchPostcodeParser
     }
 
     /**
-     * Turns spoken Dutch numbers into digits and joins adjacent digit runs.
-     * "vijf dertig" (STT-split vijfendertig) + "drieënzeventig" → 3573.
+     * Turns spoken Dutch numbers into digit tokens, packing a 4-digit postcode
+     * when possible. "drie vijf zeventig" is treated as 3573 because STT often
+     * hears "zeven drie" as "zeventig".
      *
      * @param list<string> $tokens
      * @return list<string>
      */
     private static function rewriteSpokenNumbers(array $tokens): array
     {
-        $items = [];
+        $out = [];
+        $run = [];
         $count = count($tokens);
         $i = 0;
+        $flush = static function () use (&$out, &$run): void {
+            if ($run === []) {
+                return;
+            }
+            foreach (self::packNumberRun($run) as $part) {
+                $out[] = $part;
+            }
+            $run = [];
+        };
         while ($i < $count) {
             $spoken = self::consumeSpokenNumber($tokens, $i);
             if ($spoken !== null) {
-                $items[] = ['text' => (string) $spoken['value'], 'digits' => true];
+                $run[] = $spoken['value'];
                 $i = $spoken['next'];
                 continue;
             }
-            $items[] = ['text' => $tokens[$i], 'digits' => false];
-            ++$i;
-        }
-
-        $out = [];
-        $buffer = '';
-        $flush = static function () use (&$out, &$buffer): void {
-            if ($buffer === '') {
-                return;
-            }
-            while (strlen($buffer) > 4 && preg_match('/^[1-9][0-9]{3}/', $buffer) === 1) {
-                $out[] = substr($buffer, 0, 4);
-                $buffer = substr($buffer, 4);
-            }
-            if ($buffer !== '') {
-                $out[] = $buffer;
-                $buffer = '';
-            }
-        };
-        foreach ($items as $item) {
-            if ($item['digits']) {
-                $buffer .= $item['text'];
-                continue;
-            }
             $flush();
-            $out[] = $item['text'];
+            $out[] = $tokens[$i];
+            ++$i;
         }
         $flush();
 
         return $out;
+    }
+
+    /**
+     * @param list<int> $nums
+     * @return list<string>
+     */
+    private static function packNumberRun(array $nums): array
+    {
+        $packed = self::takePostcode($nums);
+        if ($packed === null) {
+            $house = self::combineHouseNumber($nums);
+
+            return $house !== null ? [(string) $house] : array_map(static fn (int $n): string => (string) $n, $nums);
+        }
+        [$code, $used] = $packed;
+        $out = [$code];
+        $house = self::combineHouseNumber(array_slice($nums, $used));
+        if ($house !== null) {
+            $out[] = (string) $house;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param list<int> $nums
+     * @return array{0: string, 1: int}|null
+     */
+    private static function takePostcode(array $nums): ?array
+    {
+        $n = count($nums);
+        if ($n === 0) {
+            return null;
+        }
+        if ($nums[0] >= 1000 && $nums[0] <= 9999 && preg_match('/^[1-9][0-9]{3}$/', (string) $nums[0]) === 1) {
+            return [(string) $nums[0], 1];
+        }
+        if ($n >= 4 && self::allUnits(array_slice($nums, 0, 4)) && $nums[0] >= 1) {
+            return [implode('', array_map(static fn (int $digit): string => (string) $digit, array_slice($nums, 0, 4))), 4];
+        }
+        if ($n >= 2 && self::isTwoDigit($nums[0]) && self::isTwoDigit($nums[1])) {
+            $code = sprintf('%02d%02d', $nums[0], $nums[1]);
+            if (preg_match('/^[1-9][0-9]{3}$/', $code) === 1) {
+                return [$code, 2];
+            }
+        }
+        if ($n >= 3 && self::isUnit($nums[0]) && self::isTensValue($nums[1]) && self::isTwoDigit($nums[2])) {
+            $code = sprintf('%02d%02d', $nums[0] + $nums[1], $nums[2]);
+            if (preg_match('/^[1-9][0-9]{3}$/', $code) === 1) {
+                return [$code, 3];
+            }
+        }
+        if ($n >= 3 && self::isUnit($nums[0]) && self::isUnit($nums[1]) && $nums[2] === 70) {
+            $code = $nums[0].$nums[1].'73';
+            if (preg_match('/^[1-9][0-9]{3}$/', $code) === 1) {
+                return [$code, 3];
+            }
+        }
+        if ($n >= 3 && self::isUnit($nums[0]) && self::isUnit($nums[1]) && self::isTensValue($nums[2])) {
+            $code = $nums[0].$nums[1].sprintf('%02d', $nums[2]);
+            if (preg_match('/^[1-9][0-9]{3}$/', $code) === 1) {
+                return [$code, 3];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<int> $nums
+     */
+    private static function combineHouseNumber(array $nums): ?int
+    {
+        if ($nums === []) {
+            return null;
+        }
+        if (count($nums) === 1) {
+            return $nums[0] >= 1 && $nums[0] <= 99999 ? $nums[0] : null;
+        }
+        if ($nums[0] >= 100 && $nums[0] % 100 === 0) {
+            $rest = self::combineHouseNumber(array_slice($nums, 1));
+
+            return $nums[0] + ($rest ?? 0);
+        }
+        $joined = (int) implode('', array_map(static fn (int $digit): string => (string) $digit, $nums));
+
+        return $joined >= 1 && $joined <= 99999 ? $joined : $nums[0];
+    }
+
+    /**
+     * @param list<int> $nums
+     */
+    private static function allUnits(array $nums): bool
+    {
+        foreach ($nums as $num) {
+            if (!self::isUnit($num)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static function isUnit(int $value): bool
+    {
+        return $value >= 0 && $value <= 9;
+    }
+
+    private static function isTwoDigit(int $value): bool
+    {
+        return $value >= 10 && $value <= 99;
+    }
+
+    private static function isTensValue(int $value): bool
+    {
+        return in_array($value, [20, 30, 40, 50, 60, 70, 80, 90], true);
     }
 
     /**
@@ -198,6 +302,11 @@ final class DutchPostcodeParser
             return ['value' => (int) $token, 'next' => $index + 1];
         }
 
+        $hundreds = self::consumeHundreds($tokens, $index);
+        if ($hundreds !== null) {
+            return $hundreds;
+        }
+
         $compound = self::compoundFromWord($token);
         if ($compound !== null) {
             return ['value' => $compound, 'next' => $index + 1];
@@ -205,12 +314,11 @@ final class DutchPostcodeParser
 
         $units = self::lookupMap($token, self::UNITS);
         $nextIndex = $index + 1;
-        if ($units !== null && isset($tokens[$nextIndex]) && in_array(self::fold($tokens[$nextIndex]), ['en', 'ën'], true)) {
+        $hasEn = isset($tokens[$nextIndex]) && in_array(self::fold($tokens[$nextIndex]), ['en', 'ën'], true);
+        if ($units !== null && $hasEn) {
             ++$nextIndex;
-        }
-        if ($units !== null && $units >= 1 && $units <= 9 && isset($tokens[$nextIndex])) {
-            $tens = self::lookupMap($tokens[$nextIndex], self::TENS);
-            if ($tens !== null) {
+            $tens = isset($tokens[$nextIndex]) ? self::lookupMap($tokens[$nextIndex], self::TENS) : null;
+            if ($tens !== null && $units >= 1 && $units <= 9) {
                 return ['value' => $units + $tens, 'next' => $nextIndex + 1];
             }
         }
@@ -223,6 +331,66 @@ final class DutchPostcodeParser
         }
 
         return null;
+    }
+
+    /**
+     * @param list<string> $tokens
+     * @return array{value: int, next: int}|null
+     */
+    private static function consumeHundreds(array $tokens, int $index): ?array
+    {
+        $folded = self::fold($tokens[$index]);
+        $hundreds = null;
+        $next = $index + 1;
+        if (preg_match('/^(een|twee|drie|vier|vijf|zes|zeven|acht|negen)honderd$/u', $folded, $match) === 1) {
+            $hundreds = self::UNITS[$match[1]] * 100;
+        } elseif ($folded === 'honderd') {
+            $hundreds = 100;
+        } else {
+            $units = self::lookupMap($tokens[$index], self::UNITS);
+            if ($units !== null && $units >= 1 && $units <= 9 && isset($tokens[$next]) && self::fold($tokens[$next]) === 'honderd') {
+                $hundreds = $units * 100;
+                ++$next;
+            }
+        }
+        if ($hundreds === null) {
+            return null;
+        }
+        $extra = self::consumeSmallNumber($tokens, $next);
+
+        return ['value' => $hundreds + $extra['value'], 'next' => $extra['next']];
+    }
+
+    /**
+     * @param list<string> $tokens
+     * @return array{value: int, next: int}
+     */
+    private static function consumeSmallNumber(array $tokens, int $index): array
+    {
+        if (!isset($tokens[$index])) {
+            return ['value' => 0, 'next' => $index];
+        }
+        $compound = self::compoundFromWord($tokens[$index]);
+        if ($compound !== null) {
+            return ['value' => $compound, 'next' => $index + 1];
+        }
+        $units = self::lookupMap($tokens[$index], self::UNITS);
+        $next = $index + 1;
+        if ($units !== null && isset($tokens[$next]) && in_array(self::fold($tokens[$next]), ['en', 'ën'], true)) {
+            ++$next;
+            $tens = isset($tokens[$next]) ? self::lookupMap($tokens[$next], self::TENS) : null;
+            if ($tens !== null) {
+                return ['value' => $units + $tens, 'next' => $next + 1];
+            }
+        }
+        foreach ([self::TEENS, self::TENS, self::UNITS] as $map) {
+            $value = self::lookupMap($tokens[$index], $map);
+            if ($value !== null) {
+                return ['value' => $value, 'next' => $index + 1];
+            }
+        }
+
+        return ['value' => 0, 'next' => $index];
     }
 
     private static function compoundFromWord(string $token): ?int
