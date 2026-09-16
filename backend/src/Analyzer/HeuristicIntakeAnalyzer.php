@@ -180,7 +180,7 @@ final class HeuristicIntakeAnalyzer implements IntakeAnalyzer
 
     private function looksLikeBareYes(string $lower): bool
     {
-        return (bool) preg_match('/^(ja|yes|ok|okay|oké)\.?$/u', trim($lower));
+        return (bool) preg_match('/^(ja|yes|ok|okay|oké|klopt)\.?$/u', trim($lower));
     }
 
     /**

@@ -130,6 +130,13 @@ final class HeuristicIntakeAnalyzerTest extends TestCase
         self::assertTrue($proposal->addressHint['unique_claim']);
     }
 
+    public function testKloptIsAConfirmation(): void
+    {
+        $proposal = (new HeuristicIntakeAnalyzer())->analyze($this->intake('address'), 'Klopt', 'msg-k', 0);
+        self::assertTrue($proposal->explicitConfirmationAttempt);
+        self::assertSame([], $proposal->fieldUpdates);
+    }
+
     private function intake(?string $target = null): Intake
     {
         $user = new User('user_test', 'tester');

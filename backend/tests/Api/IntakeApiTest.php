@@ -400,6 +400,37 @@ final class IntakeApiTest extends WebTestCase
         self::assertStringContainsString('Voorbeeldstraat 12', $intake['next_question']['text']);
     }
 
+    public function testSpokenKloptVerifiesAddressThenRecordsTheReport(): void
+    {
+        $intake = $this->spokenAddressConfirm($this->tokenA);
+        self::assertStringStartsWith('address_confirm_', $intake['next_question']['id']);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'addr-klopt',
+            'text' => 'Klopt',
+        ], 'addr-klopt-1', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('verified', $intake['address']['verification_status']);
+        self::assertSame('ready_for_confirmation', $intake['status']);
+        self::assertNotNull($intake['summary']);
+        self::assertNull($intake['report_id']);
+        self::assertSame($intake['summary']['id'], $intake['next_question']['id']);
+        self::assertStringContainsString('Klopt dit?', $intake['next_question']['text']);
+        self::assertStringContainsString('Keuken', $intake['next_question']['text']);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'summary-klopt',
+            'text' => 'Ja, ik heb het al gecontroleerd',
+        ], 'summary-klopt-1', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('confirmed', $intake['status']);
+        self::assertNotNull($intake['report_id']);
+        self::assertSame('intake_confirmed', $intake['next_question']['id']);
+        self::assertSame('De melding is vastgelegd.', $intake['next_question']['text']);
+    }
+
     /**
      * @return array<string, mixed>
      */

@@ -8,7 +8,7 @@ final class ConversationPrompt
 {
     public static function version(): string
     {
-        return 'conversation-v5';
+        return 'conversation-v6';
     }
 
     public static function text(bool $restore, string $language): string
@@ -33,6 +33,8 @@ Letters mag de bewoner spellen met het Nederlandse spelalfabet, zoals Simon Joha
 Delegeer postcode, huisnummer en adresopzoek naar de backend. Zoek zelf geen adressen op.
 Heb je alleen de postcode, vraag dan alleen het huisnummer. Heb je alleen het huisnummer, vraag dan de postcode.
 Als de bewoner het adres afwijst, een andere postcode geeft of opnieuw wil beginnen, herhaal het oude adres niet. Zeg de nieuwe backendvraag.
+"Klopt", "ja" en "oké" zijn bevestigingen. Delegeer die meteen; vraag niet opnieuw hetzelfde adres.
+Als de backend een samenvatting stuurt, lees die tekst voor en vraag of het klopt. Zeg niet dat de melding is opgeslagen tot de backend "De melding is vastgelegd" stuurt.
 Geef geen riskante reparatie-instructies. Zeg niet dat er een monteur is gestuurd.
 Delegeer naar de backend bij feiten, adresopzoek, bevestiging of dossierwijzigingen.
 Wacht op backend-commentaar voordat je zegt dat iets is opgeslagen. Herhaal niet dezelfde vraag als de backend al een nieuwe vraag stuurt.
