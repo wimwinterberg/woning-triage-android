@@ -59,6 +59,11 @@ class IntakeEvent
         return $this->type;
     }
 
+    public function getCreatedAt(): \DateTimeImmutable
+    {
+        return $this->createdAt;
+    }
+
     /**
      * @return array<string, mixed>
      */

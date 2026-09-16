@@ -63,6 +63,22 @@ final class LiveFollowUpSpeech
         return 'There is no new resident answer yet. Do not ask a new question; wait until the resident speaks.';
     }
 
+    public static function analysisRetrySpoken(string $language): string
+    {
+        return match (true) {
+            str_starts_with($language, 'de') => 'Einen Moment, ich hatte eine kurze Störung. Bitte sagen Sie das noch einmal.',
+            str_starts_with($language, 'tr') => 'Bir saniye, kısa bir aksaklık oldu. Lütfen bir kez daha söyleyin.',
+            str_starts_with($language, 'ja') => '少々お待ちください。短い不具合がありました。もう一度お話しください。',
+            str_starts_with($language, 'en') => 'One moment, there was a short glitch. Please say that again.',
+            default => 'Een moment, er was een korte storing. Zeg dat alstublieft nog een keer.',
+        };
+    }
+
+    public static function analysisRetry(string $language): string
+    {
+        return self::sayExactly(self::analysisRetrySpoken($language), $language);
+    }
+
     public static function idlePromptSpoken(string $language): string
     {
         return match (true) {

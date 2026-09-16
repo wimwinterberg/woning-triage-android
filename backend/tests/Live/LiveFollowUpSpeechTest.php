@@ -92,4 +92,14 @@ final class LiveFollowUpSpeechTest extends TestCase
         self::assertStringContainsString('Sie sprechen Deutsch', $text);
         self::assertStringContainsString('Do not say the app screens have already changed', $text);
     }
+
+    public function testAnalysisRetryAsksTheResidentToRepeat(): void
+    {
+        $text = LiveFollowUpSpeech::analysisRetry('nl-NL');
+        self::assertStringContainsString('korte storing', $text);
+        self::assertSame(
+            'Een moment, er was een korte storing. Zeg dat alstublieft nog een keer.',
+            LiveFollowUpSpeech::analysisRetrySpoken('nl-NL'),
+        );
+    }
 }

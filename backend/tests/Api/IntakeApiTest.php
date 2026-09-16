@@ -826,6 +826,70 @@ final class IntakeApiTest extends WebTestCase
         self::assertSame('address_ask_house_number', $intake['next_question']['id']);
     }
 
+    public function testSpokenPostcodeStillLooksUpAfterStolenEventSequence(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => 0,
+            'client_message_id' => 'ledo-seq',
+            'text' => 'De keukenkraan druppelt sinds gisteren.',
+        ], 'seq-ledo', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'cause-seq',
+            'text' => 'Oorzaak onbekend',
+        ], 'seq-cause', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('ask_address', $intake['next_question']['id']);
+
+        $this->stealNextIntakeEventSequence($intake['id']);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'pc-seq',
+            'text' => 'een twee drie vier anton bernard huisnummer twaalf',
+        ], 'seq-pc', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('1234 AB', $intake['address']['postcode']);
+        self::assertSame(12, $intake['address']['house_number']);
+        self::assertNotSame('', $intake['address']['lookup_id'] ?? '');
+        self::assertGreaterThanOrEqual(1, count($intake['address']['candidates'] ?? []));
+    }
+
+    public function testLanguagePatchStillWorksAfterStolenEventSequence(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $this->enqueueLanguageSwitch('de-DE', false);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => 0,
+            'client_message_id' => 'de-seq',
+            'text' => 'Die Küche tropft seit gestern.',
+        ], 'seq-de', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('de-DE', $intake['conversation_language']);
+        self::assertSame('de-DE', $intake['ui_language_offer']['language'] ?? null);
+
+        $this->stealNextIntakeEventSequence($intake['id']);
+
+        $accepted = $this->patchJson('/api/v1/intakes/'.$intake['id'].'/language', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'mode' => 'auto',
+            'accept_ui_offer' => true,
+        ], 'seq-ui-yes');
+        self::assertSame('de-DE', $accepted['ui_language']);
+        self::assertNull($accepted['ui_language_offer']);
+
+        $this->stealNextIntakeEventSequence($intake['id']);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $accepted['revision'],
+            'client_message_id' => 'de-cause-seq',
+            'text' => 'Oorzaak onbekend',
+        ], 'seq-de-cause', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertContains($intake['fields']['cause']['state'], ['unknown', 'missing', 'reported']);
+    }
+
     public function testSpokenAddressRejectionAsksForPostcodeAgain(): void
     {
         $intake = $this->spokenAddressConfirm($this->tokenA);
@@ -979,6 +1043,31 @@ final class IntakeApiTest extends WebTestCase
         self::assertSame('confirmed', $intake['status']);
         self::assertNotNull($intake['report_id']);
         self::assertSame('De melding is vastgelegd.', $intake['next_question']['text']);
+    }
+
+    private function stealNextIntakeEventSequence(string $intakeId): int
+    {
+        $entityManager = static::getContainer()->get('doctrine')->getManager();
+        $connection = $entityManager->getConnection();
+        $max = (int) $connection->fetchOne(
+            'SELECT COALESCE(MAX(sequence), 0) FROM intake_event WHERE intake_id = ?',
+            [$intakeId],
+        );
+        $next = $max + 1;
+        $connection->insert('intake_event', [
+            'id' => 'evt_stolen_'.$next.'_'.bin2hex(random_bytes(3)),
+            'sequence' => $next,
+            'type' => 'intake.updated',
+            'revision' => 0,
+            'payload' => [],
+            'created_at' => new \DateTimeImmutable('now', new \DateTimeZone('UTC')),
+            'intake_id' => $intakeId,
+        ], [
+            'payload' => 'json',
+            'created_at' => 'datetime_immutable',
+        ]);
+
+        return $next;
     }
 
     /**

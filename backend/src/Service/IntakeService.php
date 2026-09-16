@@ -7,6 +7,7 @@ namespace App\Service;
 use App\Address\AddressLookupLogger;
 use App\Address\AddressProvider;
 use App\Agent\LanguageSwitchAgent;
+use App\Doctrine\OpenEntityManager;
 use App\Analyzer\IntakeAnalyzer;
 use App\Analyzer\ProposalValidator;
 use App\Classification\ClassificationSearchService;
@@ -42,7 +43,7 @@ final class IntakeService
     private const MAX_MESSAGE = 4000;
 
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly OpenEntityManager $entityManagers,
         private readonly TreeRepository $treeRepository,
         private readonly DecisionTreeEngine $treeEngine,
         private readonly IntakeAnalyzer $analyzer,
@@ -58,6 +59,11 @@ final class IntakeService
         private readonly LoggerInterface $logger = new NullLogger(),
         private readonly AddressLookupLogger $addressLookupLogger = new AddressLookupLogger(),
     ) {
+    }
+
+    private function entityManager(): EntityManagerInterface
+    {
+        return $this->entityManagers->get();
     }
 
     public function create(User $user, string $inputMode, ?string $language = null): Intake
@@ -83,17 +89,17 @@ final class IntakeService
         $document->uiLanguage = $ui;
         $intake = new Intake(IdGenerator::prefixed('intake'), $user, (string) $tree['version'], $this->promptVersion, $document);
         $intake->setConversationLanguage($ui);
-        $this->entityManager->persist($intake);
-        $this->entityManager->flush();
+        $this->entityManager()->persist($intake);
+        $this->entityManager()->flush();
         $this->events->publish($intake, 'intake.updated');
-        $this->entityManager->flush();
+        $this->entityManager()->flush();
 
         return $intake;
     }
 
     public function getOwned(string $id, User $user): Intake
     {
-        $intake = $this->entityManager->find(Intake::class, $id);
+        $intake = $this->entityManager()->find(Intake::class, $id);
         if (!$intake instanceof Intake || !$intake->belongsTo($user)) {
             throw new NotFoundException();
         }
@@ -121,13 +127,13 @@ final class IntakeService
 
         $sequence = $this->nextMessageSequence($intake);
         $message = new IntakeMessage($clientMessageId, $intake, $sequence, 'resident', $intake->getConversationLanguage(), $text, 'typed');
-        $this->entityManager->persist($message);
+        $this->entityManager()->persist($message);
 
         $task = new AnalysisTask(IdGenerator::prefixed('task'), $intake, 'analyze', $intake->getRevision());
-        $this->entityManager->persist($task);
-        $this->entityManager->flush();
+        $this->entityManager()->persist($task);
+        $this->entityManager()->flush();
         $this->events->publish($intake, 'task.updated', ['task_id' => $task->getId(), 'status' => $task->getStatus()]);
-        $this->entityManager->flush();
+        $this->entityManager()->flush();
 
         $this->runAnalysis($intake, $task, $text, $clientMessageId);
 
@@ -137,22 +143,22 @@ final class IntakeService
     public function runAnalysis(Intake $intake, AnalysisTask $task, string $text, string $messageId): void
     {
         $task->markRunning();
-        $this->entityManager->flush();
+        $this->entityManager()->flush();
         try {
             $proposal = $this->analyzer->analyze($intake, $text, $messageId, $task->getBaseRevision());
             $this->proposalValidator->validate($intake, $proposal);
 
-            $this->entityManager->refresh($intake);
+            $this->entityManager()->refresh($intake);
             if ($intake->getStatus()->isLocked()) {
                 $task->supersede();
-                $this->entityManager->flush();
+                $this->entityManager()->flush();
 
                 return;
             }
             if ($intake->getRevision() !== $task->getBaseRevision()) {
                 $task->supersede();
                 $this->events->publish($intake, 'task.updated', ['task_id' => $task->getId(), 'status' => $task->getStatus()]);
-                $this->entityManager->flush();
+                $this->entityManager()->flush();
 
                 return;
             }
@@ -168,7 +174,7 @@ final class IntakeService
                 $this->maybeAddAssistantQuestion($intake, $document);
                 $this->events->publish($intake, 'intake.updated');
                 $this->events->publish($intake, 'task.updated', ['task_id' => $task->getId(), 'status' => $task->getStatus()]);
-                $this->entityManager->flush();
+                $this->entityManager()->flush();
 
                 return;
             }
@@ -252,14 +258,15 @@ final class IntakeService
             $this->maybeAddAssistantQuestion($intake, $document);
             $this->events->publish($intake, 'intake.updated');
             $this->events->publish($intake, 'task.updated', ['task_id' => $task->getId(), 'status' => $task->getStatus()]);
-            $this->entityManager->flush();
+            $this->entityManager()->flush();
         } catch (ValidationFailedException $exception) {
             throw $exception;
         } catch (\Throwable $exception) {
-            if ($this->entityManager->isOpen()) {
+            $em = $this->entityManager();
+            if ($em->contains($task)) {
                 $task->fail('analysis_failed', 'Het antwoord kon niet worden verwerkt.');
                 $this->events->publish($intake, 'task.updated', ['task_id' => $task->getId(), 'status' => $task->getStatus()]);
-                $this->entityManager->flush();
+                $em->flush();
             }
             throw $exception;
         }
@@ -305,7 +312,7 @@ final class IntakeService
         $intake->setStatus($document->riskState()->blocksNormalCompletion() ? IntakeStatus::ReviewRequired : IntakeStatus::Collecting);
         $intake->bumpRevision();
         $this->events->publish($intake, 'intake.updated');
-        $this->entityManager->flush();
+        $this->entityManager()->flush();
 
         return $intake;
     }
@@ -343,7 +350,7 @@ final class IntakeService
         $intake->setStatus(IntakeStatus::Collecting);
         $intake->bumpRevision();
         $this->events->publish($intake, 'intake.updated');
-        $this->entityManager->flush();
+        $this->entityManager()->flush();
 
         return $intake;
     }
@@ -432,7 +439,7 @@ final class IntakeService
         $intake->setStatus(IntakeStatus::Collecting);
         $intake->bumpRevision();
         $this->events->publish($intake, 'intake.updated');
-        $this->entityManager->flush();
+        $this->entityManager()->flush();
 
         return [
             'lookup_id' => $lookupId,
@@ -498,7 +505,7 @@ final class IntakeService
         $intake->replaceDocument($document);
         $intake->bumpRevision();
         $this->events->publish($intake, 'intake.updated');
-        $this->entityManager->flush();
+        $this->entityManager()->flush();
 
         return $intake;
     }
@@ -531,8 +538,8 @@ final class IntakeService
         }
 
         $task = new AnalysisTask(IdGenerator::prefixed('task'), $intake, 'summary', $intake->getRevision());
-        $this->entityManager->persist($task);
-        $this->entityManager->flush();
+        $this->entityManager()->persist($task);
+        $this->entityManager()->flush();
 
         $document = $intake->document();
         $intake->bumpRevision();
@@ -543,7 +550,7 @@ final class IntakeService
         $this->addAssistantMessage($intake, $texts['resident_text']);
         $this->events->publish($intake, 'intake.updated');
         $this->events->publish($intake, 'task.updated', ['task_id' => $task->getId(), 'status' => $task->getStatus()]);
-        $this->entityManager->flush();
+        $this->entityManager()->flush();
 
         return $task->toArray();
     }
@@ -559,7 +566,7 @@ final class IntakeService
         if ($this->hasOpenAnalysis($intake)) {
             throw new IntakeBusyException();
         }
-        $existing = $this->entityManager->getRepository(Report::class)->findOneBy(['intake' => $intake]);
+        $existing = $this->entityManager()->getRepository(Report::class)->findOneBy(['intake' => $intake]);
         if ($existing instanceof Report) {
             return $intake;
         }
@@ -592,14 +599,13 @@ final class IntakeService
         $reportId = IdGenerator::prefixed('report');
         $payload = $this->buildReportPayload($intake, $document, $summaryId, $channel, $evidenceMessageId, $sourceRevision, $reportId);
         $report = new Report($reportId, $intake, $sourceRevision, $payload);
-        $this->entityManager->persist($report);
+        $this->entityManager()->persist($report);
         $intake->confirm($reportId);
         $this->events->publish($intake, 'intake.updated');
         try {
-            $this->entityManager->flush();
+            $this->entityManager()->flush();
         } catch (\Doctrine\DBAL\Exception\UniqueConstraintViolationException) {
-            $this->entityManager->clear();
-            $reloaded = $this->entityManager->find(Intake::class, $intake->getId());
+            $reloaded = $this->entityManager()->find(Intake::class, $intake->getId());
             if ($reloaded instanceof Intake && $reloaded->getReportId() !== null) {
                 return $reloaded;
             }
@@ -619,14 +625,14 @@ final class IntakeService
         $intake->setStatus(IntakeStatus::Cancelled);
         $intake->bumpRevision();
         $this->events->publish($intake, 'intake.updated');
-        $this->entityManager->flush();
+        $this->entityManager()->flush();
 
         return $intake;
     }
 
     public function getTask(Intake $intake, string $taskId): AnalysisTask
     {
-        $task = $this->entityManager->find(AnalysisTask::class, $taskId);
+        $task = $this->entityManager()->find(AnalysisTask::class, $taskId);
         if (!$task instanceof AnalysisTask || $task->getIntake()->getId() !== $intake->getId()) {
             throw new NotFoundException();
         }
@@ -661,7 +667,7 @@ final class IntakeService
 
     private function assertUniqueClientMessage(Intake $intake, string $clientMessageId, string $text): void
     {
-        $existing = $this->entityManager->find(IntakeMessage::class, $clientMessageId);
+        $existing = $this->entityManager()->find(IntakeMessage::class, $clientMessageId);
         if ($existing instanceof IntakeMessage) {
             if ($existing->toArray()['text'] !== $text) {
                 throw new \App\Exception\IdempotencyConflictException();
@@ -671,7 +677,7 @@ final class IntakeService
 
     private function hasOpenAnalysis(Intake $intake): bool
     {
-        $count = (int) $this->entityManager->createQuery(
+        $count = (int) $this->entityManager()->createQuery(
             'SELECT COUNT(t.id) FROM App\\Entity\\AnalysisTask t WHERE t.intake = :i AND t.status IN (:s)'
         )
             ->setParameter('i', $intake)
@@ -684,7 +690,7 @@ final class IntakeService
     private function supersedeOpenTasks(Intake $intake): void
     {
         /** @var list<AnalysisTask> $tasks */
-        $tasks = $this->entityManager->createQuery(
+        $tasks = $this->entityManager()->createQuery(
             'SELECT t FROM App\\Entity\\AnalysisTask t WHERE t.intake = :i AND t.status IN (:s)'
         )
             ->setParameter('i', $intake)
@@ -698,7 +704,7 @@ final class IntakeService
 
     private function nextMessageSequence(Intake $intake): int
     {
-        $max = (int) $this->entityManager->createQuery('SELECT MAX(m.sequence) FROM App\\Entity\\IntakeMessage m WHERE m.intake = :i')
+        $max = (int) $this->entityManager()->createQuery('SELECT MAX(m.sequence) FROM App\\Entity\\IntakeMessage m WHERE m.intake = :i')
             ->setParameter('i', $intake)
             ->getSingleScalarResult();
 
@@ -1623,7 +1629,7 @@ final class IntakeService
         $summaryId = (string) ($document->summary['id'] ?? '');
         $intake->replaceDocument($document);
         $task->succeed($intake->getRevision());
-        $this->entityManager->flush();
+        $this->entityManager()->flush();
         $this->confirm($intake, $intake->getRevision(), $summaryId, 'voice', $messageId);
         $document = $intake->document();
         $this->presentClosingQuestion($intake, $document);
@@ -1631,7 +1637,7 @@ final class IntakeService
         $this->maybeAddAssistantQuestion($intake, $document);
         $this->events->publish($intake, 'intake.updated');
         $this->events->publish($intake, 'task.updated', ['task_id' => $task->getId(), 'status' => $task->getStatus()]);
-        $this->entityManager->flush();
+        $this->entityManager()->flush();
     }
 
     /**
@@ -1713,7 +1719,7 @@ final class IntakeService
             $text,
             'backend',
         );
-        $this->entityManager->persist($message);
+        $this->entityManager()->persist($message);
         $this->events->publish($intake, 'assistant.message', [
             'message_id' => $message->getId(),
             'text' => $text,

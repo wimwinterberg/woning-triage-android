@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Command;
 
 use App\Address\WcsAddressProvider;
+use App\Doctrine\OpenEntityManager;
 use App\Entity\Intake;
 use App\Entity\VoiceSession;
 use App\Live\GptLiveClient;
@@ -38,7 +39,7 @@ final class LiveGatewayCommand extends Command
 {
     public function __construct(
         private readonly LiveGatewayCommandQueue $queue,
-        private readonly EntityManagerInterface $entityManager,
+        private readonly OpenEntityManager $entityManagers,
         private readonly IntakeService $intakeService,
         private readonly IntakeEventPublisher $events,
         private readonly GptLiveClient $gptLiveClient,
@@ -52,6 +53,11 @@ final class LiveGatewayCommand extends Command
         private readonly string $idleCloseSeconds = '180',
     ) {
         parent::__construct();
+    }
+
+    private function entityManager(): EntityManagerInterface
+    {
+        return $this->entityManagers->get();
     }
 
     private function apiKey(): string
@@ -90,7 +96,7 @@ final class LiveGatewayCommand extends Command
                 $idleLoggedAt = time();
             }
             foreach ($pending as $voiceSessionId) {
-                $session = $this->entityManager->find(VoiceSession::class, $voiceSessionId);
+                $session = $this->entityManager()->find(VoiceSession::class, $voiceSessionId);
                 if (!$session instanceof VoiceSession || $session->getProviderSessionId() === null) {
                     $this->queue->ack($voiceSessionId);
                     continue;
@@ -101,7 +107,7 @@ final class LiveGatewayCommand extends Command
                     $this->log($output, 'Gateway error for '.$voiceSessionId.': '.$exception->getMessage());
                 }
                 $this->queue->ack($voiceSessionId);
-                $this->entityManager->clear();
+                $this->entityManager()->clear();
             }
             usleep(100_000);
         }
@@ -122,7 +128,7 @@ final class LiveGatewayCommand extends Command
         } catch (\Throwable $exception) {
             $this->log($output, 'Sideband connect failed for '.$session->getId().': '.$exception->getMessage());
             $session->fail('sideband_connect');
-            $this->entityManager->flush();
+            $this->entityManager()->flush();
 
             return;
         }
@@ -147,7 +153,7 @@ final class LiveGatewayCommand extends Command
             try {
                 $message = $client->receive();
             } catch (ConnectionTimeoutException) {
-                $this->entityManager->refresh($session);
+                $this->entityManager()->refresh($session);
                 $this->maybeSpeakPendingFollowUp($session, $client, $output, $lastSpokenFollowUp, $lastResidentAt, $idlePrompted);
                 $this->maybeSpeakUiOffer($session, $client, $output, $lastSpokenUiOffer);
                 $this->markActivityIfIntakeChanged($session, $lastIntakeRevision, $lastResidentAt, $idlePrompted);
@@ -197,7 +203,7 @@ final class LiveGatewayCommand extends Command
             if ($type !== '') {
                 $this->log($output, 'event '.$type.' keys='.implode(',', array_keys($payload)));
             }
-            $this->entityManager->refresh($session);
+            $this->entityManager()->refresh($session);
             if (in_array($session->getStatus(), [VoiceSession::CLOSED, VoiceSession::FAILED], true)) {
                 break;
             }
@@ -222,7 +228,7 @@ final class LiveGatewayCommand extends Command
     ): void {
         $delegationId = (string) ($payload['delegation']['id'] ?? '');
         $intake = $session->getIntake();
-        $this->entityManager->refresh($intake);
+        $this->entityManager()->refresh($intake);
         $previousQuestion = (string) ($intake->document()->nextQuestion['text'] ?? '');
         $previousLanguage = $intake->getConversationLanguage();
         $previousUi = (string) ($intake->document()->uiLanguage ?? '');
@@ -252,17 +258,27 @@ final class LiveGatewayCommand extends Command
                 'analyze',
                 $intake->getRevision(),
             );
-            $this->entityManager->persist($task);
-            $this->entityManager->flush();
+            $this->entityManager()->persist($task);
+            $this->entityManager()->flush();
             $this->intakeService->runAnalysis(
                 $intake,
                 $task,
                 $transcript,
                 \App\Domain\IdGenerator::prefixed('message'),
             );
-            $this->entityManager->refresh($intake);
+            $this->entityManager()->refresh($intake);
         } catch (\Throwable $exception) {
             $this->log($output, 'analysis failed: '.$exception->getMessage());
+            $this->entityManager();
+            $this->sendEvent($client, [
+                'type' => 'session.commentary.append',
+                'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
+                'delegation_id' => $delegationId !== '' ? $delegationId : null,
+                'content' => \App\Live\LiveFollowUpSpeech::analysisRetry($previousLanguage),
+            ]);
+            $this->log($output, 'commentary skipped after analysis failure language='.$previousLanguage);
+
+            return;
         }
         $language = $intake->getConversationLanguage();
         $ui = (string) ($intake->document()->uiLanguage ?? '');
@@ -336,7 +352,7 @@ final class LiveGatewayCommand extends Command
         bool &$idlePrompted,
     ): void {
         $intake = $session->getIntake();
-        $this->entityManager->refresh($intake);
+        $this->entityManager()->refresh($intake);
         $thankYou = $intake->document()->spokenFollowUp;
         if (!is_string($thankYou) || $thankYou === '' || $thankYou === $lastSpokenFollowUp) {
             return;
@@ -361,7 +377,7 @@ final class LiveGatewayCommand extends Command
         string &$lastSpokenUiOffer,
     ): void {
         $intake = $session->getIntake();
-        $this->entityManager->refresh($intake);
+        $this->entityManager()->refresh($intake);
         $offer = $intake->document()->uiLanguageOffer;
         $question = is_array($offer) && is_string($offer['question'] ?? null) ? (string) $offer['question'] : '';
         if ($question === '' || $question === $lastSpokenUiOffer) {
@@ -385,7 +401,7 @@ final class LiveGatewayCommand extends Command
         bool &$idlePrompted,
     ): void {
         $intake = $session->getIntake();
-        $this->entityManager->refresh($intake);
+        $this->entityManager()->refresh($intake);
         $revision = $intake->getRevision();
         if ($revision !== $lastIntakeRevision) {
             $lastIntakeRevision = $revision;
@@ -417,7 +433,7 @@ final class LiveGatewayCommand extends Command
             return false;
         }
         $intake = $session->getIntake();
-        $this->entityManager->refresh($intake);
+        $this->entityManager()->refresh($intake);
         $language = $intake->getConversationLanguage();
         if ($action === LiveIdlePolicy::PROMPT) {
             $idlePrompted = true;
@@ -451,11 +467,11 @@ final class LiveGatewayCommand extends Command
 
     private function persistIdleNotice(Intake $intake, string $notice): void
     {
-        $this->entityManager->refresh($intake);
+        $this->entityManager()->refresh($intake);
         $document = $intake->document();
         $document->idleNotice = $notice;
         $intake->replaceDocument($document);
-        $this->entityManager->flush();
+        $this->entityManager()->flush();
     }
 
     private function closeIdleSession(VoiceSession $session, OutputInterface $output): void
@@ -470,7 +486,7 @@ final class LiveGatewayCommand extends Command
             'status' => $session->getStatus(),
             'close_reason' => 'idle_timeout',
         ]);
-        $this->entityManager->flush();
+        $this->entityManager()->flush();
         $this->log($output, 'Closed '.$session->getId().' after idle timeout');
     }
 
@@ -529,7 +545,7 @@ final class LiveGatewayCommand extends Command
     private function requestGreeting(WebSocketClient $client, VoiceSession $session, OutputInterface $output): void
     {
         $intake = $session->getIntake();
-        $this->entityManager->refresh($intake);
+        $this->entityManager()->refresh($intake);
         $opening = (string) ($intake->document()->nextQuestion['text'] ?? '');
         $language = $intake->getConversationLanguage();
         $spoken = LiveGreeting::spoken($opening, $language);

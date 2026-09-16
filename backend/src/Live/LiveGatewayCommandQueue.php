@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Live;
 
+use App\Doctrine\OpenEntityManager;
 use App\Entity\VoiceSession;
-use Doctrine\ORM\EntityManagerInterface;
 
 /**
  * Voice-session IDs that a long-running worker should attach to.
@@ -15,7 +15,7 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 final class LiveGatewayCommandQueue
 {
-    public function __construct(private readonly EntityManagerInterface $entityManager)
+    public function __construct(private readonly OpenEntityManager $entityManagers)
     {
     }
 
@@ -31,7 +31,7 @@ final class LiveGatewayCommandQueue
     public function pending(): array
     {
         /** @var list<string> $ids */
-        $ids = $this->entityManager->createQuery(
+        $ids = $this->entityManagers->get()->createQuery(
             'SELECT v.id FROM App\\Entity\\VoiceSession v
              WHERE v.status IN (:statuses)
                AND v.providerSessionId IS NOT NULL
