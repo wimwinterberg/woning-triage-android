@@ -6,6 +6,7 @@ namespace App\Tests\Address;
 
 use App\Address\WcsAddressProvider;
 use App\Exception\AddressLookupUnavailableException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
@@ -63,9 +64,7 @@ final class WcsAddressProviderTest extends TestCase
             $this->unit('A'),
             $this->unit('B'),
         ];
-        $provider = new WcsAddressProvider($this->httpReturning(200, $docs), 'test-key');
-
-        $all = $provider->lookup('1012 JS', 5, null);
+        $all = (new WcsAddressProvider($this->httpReturning(200, $docs), 'test-key'))->lookup('1012 JS', 5, null);
         self::assertCount(2, $all);
         self::assertSame(['A', 'B'], array_map(static fn ($candidate) => $candidate->addition, $all));
 
@@ -115,9 +114,7 @@ final class WcsAddressProviderTest extends TestCase
         self::assertSame([], $candidates);
     }
 
-    /**
-     * @dataProvider unavailableStatuses
-     */
+    #[DataProvider('unavailableStatuses')]
     public function testProviderErrorsAreUnavailable(int $status): void
     {
         $this->expectException(AddressLookupUnavailableException::class);
@@ -146,7 +143,7 @@ final class WcsAddressProviderTest extends TestCase
 
     public function testTransportFailureIsUnavailable(): void
     {
-        $http = $this->createMock(HttpClientInterface::class);
+        $http = $this->createStub(HttpClientInterface::class);
         $http->method('request')->willThrowException(new \RuntimeException('timeout'));
 
         $this->expectException(AddressLookupUnavailableException::class);
@@ -158,7 +155,7 @@ final class WcsAddressProviderTest extends TestCase
      */
     private function httpReturning(int $status, array $payload): HttpClientInterface
     {
-        $http = $this->createMock(HttpClientInterface::class);
+        $http = $this->createStub(HttpClientInterface::class);
         $http->method('request')->willReturn($this->response($status, $payload));
 
         return $http;
