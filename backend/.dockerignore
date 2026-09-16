@@ -1,0 +1,11 @@
+/.env.local
+/.env.*.local
+/.phpunit.cache
+/var
+/vendor
+/tests
+.phpunit.dist.xml
+.git
+.gitignore
+compose.yaml
+compose.override.yaml

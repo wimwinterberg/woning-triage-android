@@ -1,0 +1,89 @@
+# yaml-language-server: $schema=../vendor/symfony/dependency-injection/Loader/schema/services.schema.json
+parameters:
+    app.tree_dir: '%kernel.project_dir%/config/trees'
+    app.prompt_version: 'conversation-v14'
+    app.live_model: 'gpt-live-1'
+    env(OPENAI_API_KEY): ''
+    env(WCS_ADDRESS_API_KEY): ''
+    env(OPENAI_LIVE_VOICE): 'marin'
+    env(OPENAI_LIVE_SPEED): '1.0'
+    env(OPENAI_LIVE_IDLE_PROMPT_SECONDS): '60'
+    env(OPENAI_LIVE_IDLE_CLOSE_SECONDS): '180'
+    env(OPENAI_AGENT_MODEL): 'gpt-4.1-mini'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Kernel.php'
+
+    App\Tree\TreeRepository:
+        arguments:
+            $treeDirectory: '%app.tree_dir%'
+
+    App\Command\ValidateTreeCommand:
+        arguments:
+            $treeDirectory: '%app.tree_dir%'
+
+    App\Command\ReleaseCommand:
+        arguments:
+            $treeDirectory: '%app.tree_dir%'
+
+    App\Service\IntakeService:
+        arguments:
+            $promptVersion: '%app.prompt_version%'
+
+    App\Live\HttpGptLiveClient:
+        arguments:
+            $apiKey: '%env(default::OPENAI_API_KEY)%'
+            $model: '%app.live_model%'
+            $voice: '%env(default::OPENAI_LIVE_VOICE)%'
+            $speed: '%env(default::OPENAI_LIVE_SPEED)%'
+
+    App\Live\GptLiveClient:
+        factory: ['App\Live\GptLiveClientFactory', 'create']
+        arguments:
+            $http: '@App\Live\HttpGptLiveClient'
+            $fake: '@App\Live\FakeGptLiveClient'
+            $apiKey: '%env(default::OPENAI_API_KEY)%'
+
+    App\Command\LiveGatewayCommand:
+        arguments:
+            $apiKey: '%env(default::OPENAI_API_KEY)%'
+            $liveVoice: '%env(default::OPENAI_LIVE_VOICE)%'
+            $idlePromptSeconds: '%env(default::OPENAI_LIVE_IDLE_PROMPT_SECONDS)%'
+            $idleCloseSeconds: '%env(default::OPENAI_LIVE_IDLE_CLOSE_SECONDS)%'
+
+    App\Agent\ResponsesLanguageSwitchAgent:
+        arguments:
+            $apiKey: '%env(default::OPENAI_API_KEY)%'
+            $model: '%env(default::OPENAI_AGENT_MODEL)%'
+
+    App\Agent\LanguageSwitchAgent:
+        factory: ['App\Agent\LanguageSwitchAgentFactory', 'create']
+        arguments:
+            $http: '@App\Agent\ResponsesLanguageSwitchAgent'
+            $fake: '@App\Agent\FakeLanguageSwitchAgent'
+            $apiKey: '%env(default::OPENAI_API_KEY)%'
+
+    App\Analyzer\IntakeAnalyzer: '@App\Analyzer\HeuristicIntakeAnalyzer'
+    App\Address\FakeAddressProvider:
+        public: true
+    App\Address\WcsAddressProvider:
+        arguments:
+            $apiKey: '%env(default::WCS_ADDRESS_API_KEY)%'
+    App\Address\AddressProvider: '@App\Address\WcsAddressProvider'
+
+when@test:
+    services:
+        App\Live\GptLiveClient: '@App\Live\FakeGptLiveClient'
+        App\Address\AddressProvider: '@App\Address\FakeAddressProvider'
+        App\Agent\LanguageSwitchAgent: '@App\Agent\FakeLanguageSwitchAgent'
+        App\Agent\FakeLanguageSwitchAgent:
+            public: true

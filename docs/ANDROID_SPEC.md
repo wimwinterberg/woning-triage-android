@@ -10,7 +10,7 @@ De Android-app biedt de bewoner een rustige manier om een probleem in huis te me
 
 Voorgestelde basis: Kotlin, Jetpack Compose, Material 3, ViewModel, coroutines en StateFlow. De exacte stabiele dependencyversies, compile-/target-SDK en WebRTC-library worden bij de technische proef vastgesteld en daarna vastgelegd in een version catalog en buildconfiguratie. Voorstel minimum: Android 10; nog te bevestigen.
 
-De app is zelfstandig. Er is geen afhankelijkheid van Keyplan, Teamwissels of een bestaande mobiele app. Een login- of activatiescherm is afhankelijk van OPEN-03; onderstaande schermen veronderstellen geldige backendtoegang.
+De app is zelfstandig. Er is geen afhankelijkheid van Keyplan, Teamwissels of een bestaande mobiele app. Toegang gaat via `POST /api/v1/auth/session`; onderstaande schermen veronderstellen geldige backendtoegang.
 
 ## 2. Navigatie en schermen
 
@@ -60,7 +60,7 @@ Als een wijziging gevolgen heeft voor andere velden, toon kort: **Door deze wijz
 Toon:
 
 - Het probleem in de gesprekstaal.
-- Locatie, element, defect en oorzaak, inclusief onbekende gegevens.
+- Ruimte, element, defect en oorzaak, inclusief onbekende gegevens.
 - Eventuele markering dat menselijke beoordeling nodig is.
 - De Nederlandse omschrijving onder **Omschrijving voor de medewerker**, wanneer de gesprekstaal anders is.
 - **Aanpassen** en **Bevestigen**.
@@ -175,9 +175,9 @@ Zie [ACCEPTANCE.md](ACCEPTANCE.md) voor de controleerbare scenario's en nog niet
 
 ## 11. Adres verzamelen en verifiëren
 
-Voeg vóór de eindcontrole een adresstap toe, via gesprek of invoervelden. Verzamel postcode en huisnummer, vraag een toevoeging alleen waar nodig. Ondersteun dat een bewoner adresgegevens al tijdens de probleembeschrijving noemt. De backend zoekt op; het model verzint geen straat of woonplaats.
+Voeg vóór de eindcontrole een adresstap toe, via gesprek, GPS of invoervelden. Verzamel postcode en huisnummer, of vraag de GPS-locatie (`Gebruik mijn locatie`). Vraag een toevoeging alleen waar nodig. Ondersteun dat een bewoner adresgegevens al tijdens de probleembeschrijving noemt. De backend zoekt op; het model verzint geen straat of woonplaats.
 
-Toon het volledige gevonden adres en laat de agent dit in de gesprekstaal ter controle voorleggen. Een expliciete gesproken bevestiging of knop bevestigt precies de getoonde kandidaat. Bij meerdere adressen vraagt de app om de toevoeging of laat ze kandidaten kiezen. Bij nul resultaten corrigeert de bewoner de invoer. Bij storing blijft de intake bewaard, maar wordt geen geverifieerd adres gesuggereerd.
+Toon het volledige gevonden adres en laat de agent dit in de gesprekstaal ter controle voorleggen. Een expliciete gesproken bevestiging of knop bevestigt precies de getoonde kandidaat. Bij meerdere adressen (GPS in de buurt of meerdere units) toont de app de lijst en laat de bewoner kiezen; nooit automatisch het eerste resultaat. Bij nul resultaten corrigeert de bewoner de invoer of probeert GPS opnieuw. Bij storing blijft de intake bewaard, maar wordt geen geverifieerd adres gesuggereerd.
 
 Een wijziging van postcode, huisnummer, toevoeging of kandidaat trekt de eerdere adresverificatie en samenvatting in. Eindcontrole toont probleem én adres. Als alles is gecontroleerd, roept de app de afrondingsroute aan. Bij timeout controleert zij de status en herhaalt zo nodig met dezelfde idempotentiesleutel. Nooit een succesmelding uitsluitend op basis van uitgesproken modeltekst.
 

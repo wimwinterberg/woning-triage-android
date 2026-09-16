@@ -1,0 +1,147 @@
+# DigitalOcean App Platform spec for the Symfony API in backend/.
+# Attach this repo in the control panel, or add a github/gitlab source when using doctl.
+# Docs: docs/DIGITALOCEAN.md
+name: woningtriage
+region: ams
+features:
+- buildpack-stack=ubuntu-22
+services:
+- name: api
+  source_dir: backend
+  environment_slug: php
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  http_port: 8080
+  health_check:
+    http_path: /health
+    initial_delay_seconds: 20
+    period_seconds: 10
+    timeout_seconds: 5
+    success_threshold: 1
+    failure_threshold: 3
+  envs:
+  - key: APP_ENV
+    scope: RUN_AND_BUILD_TIME
+    value: "prod"
+  - key: APP_DEBUG
+    scope: RUN_AND_BUILD_TIME
+    value: "0"
+  - key: APP_SECRET
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: "replace-with-openssl-rand-hex-32"
+  - key: DATABASE_URL
+    scope: RUN_TIME
+    value: ${db.DATABASE_URL}
+  - key: DEFAULT_URI
+    scope: RUN_TIME
+    value: ${api.PUBLIC_URL}
+  - key: CORS_ALLOW_ORIGIN
+    scope: RUN_TIME
+    value: "^https://.*$"
+  - key: WCS_ADDRESS_API_KEY
+    scope: RUN_TIME
+    type: SECRET
+    value: ""
+  - key: OPENAI_API_KEY
+    scope: RUN_TIME
+    type: SECRET
+    value: ""
+  - key: OPENAI_LIVE_MODEL
+    scope: RUN_TIME
+    value: gpt-live-1
+  - key: OPENAI_LIVE_VOICE
+    scope: RUN_TIME
+    value: marin
+  - key: OPENAI_LIVE_SPEED
+    scope: RUN_TIME
+    value: "1.0"
+  - key: OPENAI_LIVE_IDLE_PROMPT_SECONDS
+    scope: RUN_TIME
+    value: "60"
+  - key: OPENAI_LIVE_IDLE_CLOSE_SECONDS
+    scope: RUN_TIME
+    value: "180"
+  - key: OPENAI_AGENT_MODEL
+    scope: RUN_TIME
+    value: gpt-4.1-mini
+  - key: SYMFONY_TRUSTED_PROXIES
+    scope: RUN_TIME
+    value: "127.0.0.1,REMOTE_ADDR,PRIVATE_SUBNETS"
+  - key: SYMFONY_TRUSTED_HEADERS
+    scope: RUN_TIME
+    value: "x-forwarded-for,x-forwarded-proto,x-forwarded-port,x-forwarded-host"
+workers:
+- name: live-gateway
+  source_dir: backend
+  environment_slug: php
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  run_command: php bin/console woningtriage:live-gateway --env=prod
+  envs:
+  - key: APP_ENV
+    scope: RUN_AND_BUILD_TIME
+    value: "prod"
+  - key: APP_DEBUG
+    scope: RUN_AND_BUILD_TIME
+    value: "0"
+  - key: APP_SECRET
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: "replace-with-openssl-rand-hex-32"
+  - key: DATABASE_URL
+    scope: RUN_TIME
+    value: ${db.DATABASE_URL}
+  - key: WCS_ADDRESS_API_KEY
+    scope: RUN_TIME
+    type: SECRET
+    value: ""
+  - key: OPENAI_API_KEY
+    scope: RUN_TIME
+    type: SECRET
+    value: ""
+  - key: OPENAI_LIVE_MODEL
+    scope: RUN_TIME
+    value: gpt-live-1
+  - key: OPENAI_LIVE_VOICE
+    scope: RUN_TIME
+    value: marin
+  - key: OPENAI_LIVE_SPEED
+    scope: RUN_TIME
+    value: "1.0"
+  - key: OPENAI_LIVE_IDLE_PROMPT_SECONDS
+    scope: RUN_TIME
+    value: "60"
+  - key: OPENAI_LIVE_IDLE_CLOSE_SECONDS
+    scope: RUN_TIME
+    value: "180"
+  - key: OPENAI_AGENT_MODEL
+    scope: RUN_TIME
+    value: gpt-4.1-mini
+jobs:
+- name: migrate
+  kind: PRE_DEPLOY
+  source_dir: backend
+  environment_slug: php
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  run_command: php bin/console woningtriage:release --no-interaction --env=prod
+  envs:
+  - key: APP_ENV
+    scope: RUN_AND_BUILD_TIME
+    value: "prod"
+  - key: APP_DEBUG
+    scope: RUN_AND_BUILD_TIME
+    value: "0"
+  - key: APP_SECRET
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: "replace-with-openssl-rand-hex-32"
+  - key: DATABASE_URL
+    scope: RUN_TIME
+    value: ${db.DATABASE_URL}
+databases:
+- name: db
+  engine: PG
+  version: "16"
+  production: false
