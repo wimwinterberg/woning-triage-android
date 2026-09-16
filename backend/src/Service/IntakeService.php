@@ -28,6 +28,7 @@ use App\Exception\IntakeLockedException;
 use App\Exception\NotFoundException;
 use App\Exception\SummaryStaleException;
 use App\Exception\ValidationFailedException;
+use App\Http\OperationalLog;
 use App\Tree\DecisionTreeEngine;
 use App\Tree\TreeRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -187,7 +188,23 @@ final class IntakeService
             if ($proposal->suggestedLanguage !== null) {
                 $intake->setConversationLanguage($proposal->suggestedLanguage);
                 $document->invalidateSummary();
-                $this->maybeOfferUiLanguage($intake, $document);
+                $applyUi = $proposal->languageExplicit && (new \App\Domain\LanguagePolicy())->isUiSwitchRequest($text);
+                if ($applyUi) {
+                    $document->uiLanguage = \App\Domain\UiLanguages::uiTagForConversation($proposal->suggestedLanguage);
+                    $document->uiLanguageOffer = null;
+                } else {
+                    $this->maybeOfferUiLanguage($intake, $document);
+                }
+                OperationalLog::write(sprintf(
+                    'language suggested=%s explicit=%s apply_ui=%s conversation=%s ui=%s offer=%s text=%s',
+                    $proposal->suggestedLanguage,
+                    $proposal->languageExplicit ? '1' : '0',
+                    $applyUi ? '1' : '0',
+                    $intake->getConversationLanguage(),
+                    (string) ($document->uiLanguage ?? ''),
+                    is_array($document->uiLanguageOffer) ? (string) ($document->uiLanguageOffer['language'] ?? '') : '',
+                    mb_substr(preg_replace('/\s+/u', ' ', $text) ?? $text, 0, 160),
+                ));
             }
 
             $hint = $proposal->addressHint;

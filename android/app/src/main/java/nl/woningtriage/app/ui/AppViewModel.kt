@@ -1,5 +1,6 @@
 package nl.woningtriage.app.ui
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -377,6 +378,7 @@ class AppViewModel(
 
     fun selectUiLanguage(tag: String) = run("language") {
         val normalized = UiLocale.fromTag(tag)
+        Log.i(LANG_TAG, "picker select=$normalized screen=${_state.value.screen} intake=${_state.value.intake?.id}")
         tokens.uiLocale = normalized
         _state.value = _state.value.copy(uiLocale = normalized, showLanguagePicker = false)
         try {
@@ -403,6 +405,7 @@ class AppViewModel(
 
     private fun answerUiOffer(accept: Boolean) = run("ui-offer") {
         val intake = _state.value.intake ?: return@run
+        Log.i(LANG_TAG, "offer accept=$accept currentUi=${_state.value.uiLocale} offer=${intake.uiLanguageOffer}")
         val updated = api.changeLanguage(
             intake.id,
             UUID.randomUUID().toString(),
@@ -500,6 +503,8 @@ class AppViewModel(
     }
 
     private suspend fun refresh(id: String, fromWatch: Boolean = false) {
+        val previousUi = _state.value.uiLocale
+        val previousOffer = _state.value.uiOffer?.language
         val intake = api.getIntake(id)
         val question = intake.nextQuestion?.text
         val transcript = _state.value.transcript.toMutableList()
@@ -527,6 +532,17 @@ class AppViewModel(
         if (idleClosed && (_state.value.voiceConnected || _state.value.connectionLabel != "idle_closed")) {
             runCatching { voice.stop() }
         }
+        val nextUi = if (_state.value.screen == Screen.Start) tokens.uiLocale else (intake.uiLanguage ?: previousUi)
+        if (intake.uiLanguage != previousUi || intake.uiLanguageOffer?.language != previousOffer) {
+            Log.i(
+                LANG_TAG,
+                "poll conv=${intake.conversationLanguage} ui=${intake.uiLanguage} offer=${intake.uiLanguageOffer} prevUi=$previousUi prevOffer=$previousOffer",
+            )
+        }
+        if (nextUi != previousUi && _state.value.screen != Screen.Start) {
+            tokens.uiLocale = nextUi
+            recreateForLocale?.invoke(nextUi)
+        }
         _state.value = _state.value.copy(
             intake = intake,
             transcript = transcript,
@@ -538,7 +554,7 @@ class AppViewModel(
                 _state.value.busy -> "processing"
                 else -> _state.value.connectionLabel
             },
-            uiLocale = if (_state.value.screen == Screen.Start) tokens.uiLocale else (intake.uiLanguage ?: _state.value.uiLocale),
+            uiLocale = nextUi,
             uiOffer = intake.uiLanguageOffer,
         )
         if (screen == Screen.Completed || screen == Screen.ReviewRequired) {
@@ -584,6 +600,7 @@ class AppViewModel(
     }
 
     companion object {
+        private const val LANG_TAG = "WoningtriageLang"
         fun factory(api: WoningtriageApi, tokens: TokenStore, voice: VoiceSessionClient) =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")

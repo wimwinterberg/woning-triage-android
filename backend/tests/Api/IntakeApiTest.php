@@ -517,6 +517,26 @@ final class IntakeApiTest extends WebTestCase
         self::assertNotContains($session['id'], $queue->pending());
     }
 
+    public function testSpokenInterfaceRequestSwitchesUiWithoutOffer(): void
+    {
+        $intake = $this->postJson('/api/v1/intakes', $this->tokenA, [
+            'input_mode' => 'text',
+            'language' => 'en-GB',
+        ], 'create-en-ui', 201);
+        self::assertSame('en-GB', $intake['conversation_language']);
+        self::assertSame('en-GB', $intake['ui_language']);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'ui-nl',
+            'text' => 'Zet de interface naar het Nederlands',
+        ], 'ui-nl-msg', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('nl-NL', $intake['conversation_language']);
+        self::assertSame('nl-NL', $intake['ui_language']);
+        self::assertNull($intake['ui_language_offer']);
+    }
+
     public function testGermanTurkishAndJapaneseSwitchAndStay(): void
     {
         $cases = [

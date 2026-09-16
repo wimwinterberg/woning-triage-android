@@ -99,6 +99,9 @@ final class LanguagePolicyTest extends TestCase
         self::assertSame('ja-JP', $policy->isExplicitLanguageRequest('Please speak Japanese'));
         self::assertSame('pl-PL', $policy->isExplicitLanguageRequest('Please speak Polish'));
         self::assertSame('ar', $policy->isExplicitLanguageRequest('Speak Arabic'));
+        self::assertSame('nl-NL', $policy->isExplicitLanguageRequest('Zet de interface naar het Nederlands'));
+        self::assertTrue($policy->isUiSwitchRequest('Zet de interface naar het Nederlands'));
+        self::assertFalse($policy->isUiSwitchRequest('Spreek Nederlands alsjeblieft'));
     }
 
     public function testClearPolishSentenceSwitches(): void
