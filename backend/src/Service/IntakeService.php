@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Address\AddressLookupLogger;
 use App\Address\AddressProvider;
 use App\Analyzer\IntakeAnalyzer;
 use App\Analyzer\ProposalValidator;
 use App\Classification\ClassificationSearchService;
 use App\Domain\AddressNormalizer;
+use App\Domain\DutchPostcodeParser;
 use App\Domain\FieldName;
 use App\Domain\IdGenerator;
 use App\Domain\IntakeStatus;
@@ -50,6 +52,7 @@ final class IntakeService
         private readonly ClassificationSearchService $classificationSearch,
         private readonly string $promptVersion,
         private readonly LoggerInterface $logger = new NullLogger(),
+        private readonly AddressLookupLogger $addressLookupLogger = new AddressLookupLogger(),
     ) {
     }
 
@@ -154,8 +157,18 @@ final class IntakeService
                 $document->invalidateSummary();
             }
 
-            if ($proposal->addressHint !== null) {
-                $this->applyAddressHint($intake, $document, $proposal->addressHint);
+            $hint = $proposal->addressHint;
+            if ($hint === null && DutchPostcodeParser::claimsSingleAddress($text)) {
+                $hint = [
+                    'postcode' => null,
+                    'house_number' => null,
+                    'addition' => null,
+                    'street' => null,
+                    'unique_claim' => true,
+                ];
+            }
+            if ($hint !== null) {
+                $this->applyAddressHint($intake, $document, $hint);
             }
 
             $this->refreshNextQuestion($intake, $document);
@@ -267,6 +280,13 @@ final class IntakeService
             $this->addressProvider->lookup($normalizedPostcode, $normalizedNumber, $normalizedAddition),
         );
         $lookupId = IdGenerator::prefixed('lookup');
+        $this->addressLookupLogger->log('intake_stored', [
+            'intake_id' => $intake->getId(),
+            'source' => 'ui',
+            'provider' => $this->addressProvider::class,
+            'candidate_count' => count($candidates),
+            'has_addition_filter' => $normalizedAddition !== null,
+        ]);
         $document = $intake->document();
         $document->recordAddressInput([
             'postcode' => $normalizedPostcode,
@@ -634,6 +654,10 @@ final class IntakeService
                     ? 'Er is geen adres gevonden. Controleer postcode, huisnummer en eventuele toevoeging.'
                     : 'No address was found. Please check the postcode, house number and any addition.',
             ];
+            $this->addressLookupLogger->log('follow_up', [
+                'question_id' => 'address_no_match',
+                'candidate_count' => 0,
+            ]);
 
             return;
         }
@@ -648,6 +672,10 @@ final class IntakeService
                     ? 'Is dit uw adres: '.$display.'?'
                     : 'Is this your address: '.$display.'?',
             ];
+            $this->addressLookupLogger->log('follow_up', [
+                'question_id' => 'address_confirm',
+                'candidate_count' => 1,
+            ]);
 
             return;
         }
@@ -659,10 +687,14 @@ final class IntakeService
                 ? 'Er zijn meerdere adressen gevonden. Kies de juiste toevoeging.'
                 : 'Several addresses were found. Please choose the correct addition.',
         ];
+        $this->addressLookupLogger->log('follow_up', [
+            'question_id' => 'address_select',
+            'candidate_count' => count($candidates),
+        ]);
     }
 
     /**
-     * @param array{postcode: ?string, house_number: ?int, addition: ?string} $hint
+     * @param array{postcode: ?string, house_number: ?int, addition: ?string, street?: ?string, unique_claim?: bool} $hint
      */
     private function applyAddressHint(Intake $intake, \App\Domain\IntakeDocument $document, array $hint): void
     {
@@ -702,6 +734,16 @@ final class IntakeService
             $addition = null;
         }
 
+        $this->addressLookupLogger->log('hint', [
+            'intake_id' => $intake->getId(),
+            'provider' => $this->addressProvider::class,
+            'has_postcode' => $postcode !== null,
+            'has_house_number' => $number !== null,
+            'has_addition' => $addition !== null,
+            'has_street' => is_string($hint['street'] ?? null) && trim((string) $hint['street']) !== '',
+            'unique_claim' => (bool) ($hint['unique_claim'] ?? false),
+        ]);
+
         if ($postcode === null && $number === null) {
             return;
         }
@@ -726,6 +768,12 @@ final class IntakeService
                 $this->addressProvider->lookup($postcode, $number, $addition),
             );
         } catch (\App\Exception\AddressLookupUnavailableException) {
+            $this->addressLookupLogger->log('unavailable', [
+                'intake_id' => $intake->getId(),
+                'provider' => $this->addressProvider::class,
+                'candidate_count' => 0,
+                'source' => 'voice',
+            ]);
             $this->logger->info('Address lookup unavailable', [
                 'intake_id' => $intake->getId(),
                 'candidate_count' => null,
@@ -743,6 +791,16 @@ final class IntakeService
             return;
         }
 
+        $beforeNarrow = count($candidates);
+        $candidates = $this->narrowCandidates($candidates, $postcode, $number, $hint);
+        $this->addressLookupLogger->log('intake_stored', [
+            'intake_id' => $intake->getId(),
+            'source' => 'voice',
+            'provider' => $this->addressProvider::class,
+            'candidate_count' => count($candidates),
+            'narrowed_from' => $beforeNarrow,
+            'unique_claim' => (bool) ($hint['unique_claim'] ?? false),
+        ]);
         $this->logger->info('Address lookup finished', [
             'intake_id' => $intake->getId(),
             'candidate_count' => count($candidates),
@@ -756,6 +814,81 @@ final class IntakeService
             'lookup_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format(DATE_ATOM),
             'provider' => 'configured',
         ]);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $candidates
+     * @param array{postcode: ?string, house_number: ?int, addition: ?string, street?: ?string, unique_claim?: bool} $hint
+     * @return list<array<string, mixed>>
+     */
+    private function narrowCandidates(array $candidates, string $postcode, int $number, array $hint): array
+    {
+        $matched = [];
+        foreach ($candidates as $candidate) {
+            if (!is_array($candidate)) {
+                continue;
+            }
+            $candidateNumber = (int) ($candidate['house_number'] ?? 0);
+            $candidatePostcode = (string) ($candidate['postcode'] ?? '');
+            if ($candidateNumber !== $number || !AddressNormalizer::samePostcode($candidatePostcode, $postcode)) {
+                continue;
+            }
+            $matched[] = $candidate;
+        }
+
+        $street = is_string($hint['street'] ?? null) ? trim((string) $hint['street']) : '';
+        if ($street !== '' && $matched !== []) {
+            $byStreet = [];
+            foreach ($matched as $candidate) {
+                if ($this->streetsMatch($street, (string) ($candidate['street'] ?? ''))) {
+                    $byStreet[] = $candidate;
+                }
+            }
+            if ($byStreet !== []) {
+                $matched = $byStreet;
+            }
+        }
+
+        if ((bool) ($hint['unique_claim'] ?? false) && count($matched) > 1) {
+            $plain = [];
+            foreach ($matched as $candidate) {
+                $addition = $candidate['addition'] ?? null;
+                if ($addition === null || $addition === '') {
+                    $plain[] = $candidate;
+                }
+            }
+            if ($plain !== []) {
+                $matched = $plain;
+            }
+        }
+
+        return $matched;
+    }
+
+    private function streetsMatch(string $spoken, string $candidate): bool
+    {
+        $left = $this->streetKey($spoken);
+        $right = $this->streetKey($candidate);
+        if ($left === '' || $right === '') {
+            return false;
+        }
+        if ($left === $right) {
+            return true;
+        }
+        if (str_starts_with($left, $right) || str_starts_with($right, $left)) {
+            return true;
+        }
+
+        return levenshtein($left, $right) <= 3 && min(strlen($left), strlen($right)) >= 6;
+    }
+
+    private function streetKey(string $name): string
+    {
+        $folded = mb_strtolower($name);
+        $folded = str_replace(['ë', 'é', 'è', 'ï'], ['e', 'e', 'e', 'i'], $folded);
+        $folded = preg_replace('/[^a-z]/', '', $folded) ?? $folded;
+
+        return preg_replace('/(straat|laan|weg|plein|gracht|kade|singel|hof|dreef|pad|steeg|dijk|baan)$/', '', $folded) ?? $folded;
     }
 
     private function mergePostcode(?string $incoming, mixed $existing): ?string

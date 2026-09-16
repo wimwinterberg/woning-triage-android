@@ -8,9 +8,32 @@ final class AddressNormalizer
 {
     public function normalizePostcode(string $postcode): string
     {
-        $compact = strtoupper(preg_replace('/\s+/', '', $postcode) ?? '');
-        if (!preg_match('/^[1-9][0-9]{3}[A-Z]{2}$/', $compact)) {
+        $display = self::displayPostcode($postcode);
+        if ($display === null) {
             throw new \InvalidArgumentException('Ongeldige postcode.');
+        }
+
+        return $display;
+    }
+
+    public static function compactPostcode(string $postcode): string
+    {
+        return strtoupper(preg_replace('/\s+/', '', $postcode) ?? '');
+    }
+
+    public static function samePostcode(string $left, string $right): bool
+    {
+        $a = self::compactPostcode($left);
+        $b = self::compactPostcode($right);
+
+        return $a !== '' && $a === $b;
+    }
+
+    public static function displayPostcode(string $postcode): ?string
+    {
+        $compact = self::compactPostcode($postcode);
+        if (preg_match('/^[1-9][0-9]{3}[A-Z]{2}$/', $compact) !== 1) {
+            return null;
         }
 
         return substr($compact, 0, 4).' '.substr($compact, 4, 2);
