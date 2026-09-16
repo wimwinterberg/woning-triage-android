@@ -1,7 +1,2 @@
-
-services:
-###> doctrine/doctrine-bundle ###
-  database:
-    ports:
-      - "5432"
-###< doctrine/doctrine-bundle ###
+# Local Compose override. Bind-mounts and HTTP port mapping live in compose.yaml.
+services: {}

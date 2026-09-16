@@ -3,8 +3,13 @@ package nl.woningtriage.app.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import nl.woningtriage.app.data.api.AddressLookupRequest
@@ -57,6 +62,7 @@ class AppViewModel(
     )
     val state: StateFlow<AppUiState> = _state
     private var confirmKey: String? = null
+    private var watchJob: Job? = null
 
     fun onCode(value: String) { _state.value = _state.value.copy(activationCode = value) }
     fun onDraft(value: String) { _state.value = _state.value.copy(draft = value) }
@@ -73,24 +79,50 @@ class AppViewModel(
 
     fun startIntake(voiceMode: Boolean) = run("start") {
         stopVoiceInternal()
-        val intake = api.createIntake(UUID.randomUUID().toString(), CreateIntakeRequest(if (voiceMode) "voice" else "text"))
+        if (voiceMode) {
+            coroutineScope {
+                val offerJob = async { voice.prepareOffer() }
+                val intake = api.createIntake(UUID.randomUUID().toString(), CreateIntakeRequest("voice"))
+                tokens.activeIntakeId = intake.id
+                _state.value = _state.value.copy(
+                    intake = intake,
+                    preferTyping = false,
+                    screen = Screen.Conversation,
+                    transcript = listOfNotNull(intake.nextQuestion?.text?.let { TranscriptLine("assistant", it) }),
+                    connectionLabel = "connecting",
+                )
+                watchIntake(intake.id)
+                runCatching {
+                    completeVoiceStart(intake.id, offerJob.await())
+                }.onFailure { error ->
+                    _state.value = _state.value.copy(
+                        voiceConnected = false,
+                        connectionLabel = "disconnected",
+                        error = friendlyVoiceError(error),
+                    )
+                }
+            }
+            return@run
+        }
+        val intake = api.createIntake(UUID.randomUUID().toString(), CreateIntakeRequest("text"))
         tokens.activeIntakeId = intake.id
         _state.value = _state.value.copy(
             intake = intake,
-            preferTyping = !voiceMode,
+            preferTyping = true,
             screen = Screen.Conversation,
             transcript = listOfNotNull(intake.nextQuestion?.text?.let { TranscriptLine("assistant", it) }),
-            connectionLabel = if (voiceMode) "connecting" else "disconnected",
+            connectionLabel = "disconnected",
         )
-        if (voiceMode) {
-            startVoice(intake.id)
-        }
+        watchIntake(intake.id)
     }
 
     fun resumeIntake() = run("resume") {
         val id = tokens.activeIntakeId ?: return@run
         val intake = api.getIntake(id)
         _state.value = _state.value.copy(intake = intake, screen = screenFor(intake), error = null)
+        if (intake.status == "collecting" || intake.status == "ready_for_confirmation") {
+            watchIntake(intake.id)
+        }
     }
 
     fun sendDraft() = run("message") {
@@ -179,11 +211,13 @@ class AppViewModel(
     }
 
     fun stopConversation() = run("stop") {
+        watchJob?.cancel()
         stopVoiceInternal()
         _state.value = _state.value.copy(voiceConnected = false, connectionLabel = "disconnected", screen = Screen.Start)
     }
 
     fun goStart() {
+        watchJob?.cancel()
         stopVoiceInternal()
         confirmKey = null
         _state.value = _state.value.copy(screen = Screen.Start, intake = null, transcript = emptyList(), error = null)
@@ -192,29 +226,76 @@ class AppViewModel(
     fun goAddress() { _state.value = _state.value.copy(screen = Screen.Address) }
     fun goConversation() { _state.value = _state.value.copy(screen = Screen.Conversation, editingField = null) }
 
-    private suspend fun startVoice(intakeId: String) {
+    private suspend fun completeVoiceStart(intakeId: String, offer: String) {
         _state.value = _state.value.copy(connectionLabel = "connecting")
-        val offer = voice.prepareOffer()
         val session = api.startVoice(intakeId, UUID.randomUUID().toString(), VoiceStartRequest(offer))
-        session.sdpAnswer?.let { voice.applyRemoteAnswer(it) }
-        _state.value = _state.value.copy(voiceConnected = true, connectionLabel = "connected", voiceSessionId = session.id)
+        val answer = session.sdpAnswer
+        if (session.live && answer != null && nl.woningtriage.app.voice.Sdp.canApplyAnswer(offer, answer)) {
+            val opening = _state.value.intake?.nextQuestion?.text.orEmpty()
+            voice.requestOpeningGreeting(opening)
+            voice.applyRemoteAnswer(answer)
+            voice.requestOpeningGreeting(opening)
+            _state.value = _state.value.copy(voiceConnected = true, connectionLabel = "connected", voiceSessionId = session.id)
+        } else {
+            _state.value = _state.value.copy(
+                voiceConnected = false,
+                connectionLabel = "disconnected",
+                voiceSessionId = session.id,
+                error = "Spraak is niet live verbonden (geen OPENAI_API_KEY). U kunt typen.",
+            )
+        }
     }
 
-    private suspend fun refresh(id: String) {
+    private fun friendlyVoiceError(error: Throwable): String {
+        val message = error.message.orEmpty()
+        return if (message.contains("m-lines", ignoreCase = true) || message.contains("SDP", ignoreCase = true)) {
+            "Spraakverbinding mislukt. Zet OPENAI_API_KEY in backend/.env of typ uw antwoord."
+        } else {
+            message.ifBlank { "Spraakverbinding mislukt. U kunt typen." }
+        }
+    }
+
+    private fun watchIntake(id: String) {
+        watchJob?.cancel()
+        watchJob = viewModelScope.launch {
+            while (isActive) {
+                delay(700)
+                val current = _state.value
+                if (current.intake?.id != id || current.busy) {
+                    continue
+                }
+                if (current.screen !in listOf(Screen.Conversation, Screen.Address, Screen.Review, Screen.FieldEdit)) {
+                    return@launch
+                }
+                runCatching { refresh(id, fromWatch = true) }
+            }
+        }
+    }
+
+    private suspend fun refresh(id: String, fromWatch: Boolean = false) {
         val intake = api.getIntake(id)
         val question = intake.nextQuestion?.text
         val transcript = _state.value.transcript.toMutableList()
         if (question != null && transcript.none { it.speaker == "assistant" && it.text == question }) {
             transcript += TranscriptLine("assistant", question)
         }
-        val screen = when {
-            intake.status == "confirmed" -> Screen.Completed
-            intake.status == "review_required" -> Screen.ReviewRequired
-            intake.status == "ready_for_confirmation" -> Screen.Review
-            intake.address?.verificationStatus != "verified" && intake.fields.values.count { it.state == "reported" || it.state == "unknown" } >= 3 -> Screen.Address
-            else -> _state.value.screen
+        val stayInVoice = fromWatch && _state.value.voiceConnected && _state.value.screen == Screen.Conversation
+        val screen = screenAfterRefresh(
+            status = intake.status,
+            addressVerified = intake.address?.verificationStatus == "verified",
+            completedLedoCount = completedLedoCount(intake),
+            current = _state.value.screen,
+            stayInVoiceConversation = stayInVoice,
+        )
+        _state.value = _state.value.copy(
+            intake = intake,
+            transcript = transcript,
+            screen = screen,
+            connectionLabel = if (_state.value.busy) "processing" else _state.value.connectionLabel,
+        )
+        if (screen == Screen.Completed || screen == Screen.ReviewRequired) {
+            watchJob?.cancel()
         }
-        _state.value = _state.value.copy(intake = intake, transcript = transcript, screen = screen, connectionLabel = if (_state.value.busy) "processing" else _state.value.connectionLabel)
     }
 
     private fun screenFor(intake: Intake): Screen = when (intake.status) {
@@ -249,6 +330,11 @@ class AppViewModel(
         }
     }
 
+    override fun onCleared() {
+        watchJob?.cancel()
+        super.onCleared()
+    }
+
     companion object {
         fun factory(api: WoningtriageApi, tokens: TokenStore, voice: VoiceSessionClient) =
             object : ViewModelProvider.Factory {
@@ -256,4 +342,25 @@ class AppViewModel(
                 override fun <T : ViewModel> create(modelClass: Class<T>): T = AppViewModel(api, tokens, voice) as T
             }
     }
+}
+
+internal fun completedLedoCount(intake: Intake): Int =
+    listOf("location", "element", "defect", "cause").count { key ->
+        val state = intake.fields[key]?.state
+        state == "reported" || state == "unknown"
+    }
+
+internal fun screenAfterRefresh(
+    status: String,
+    addressVerified: Boolean,
+    completedLedoCount: Int,
+    current: Screen,
+    stayInVoiceConversation: Boolean,
+): Screen = when {
+    status == "confirmed" -> Screen.Completed
+    status == "review_required" -> Screen.ReviewRequired
+    status == "ready_for_confirmation" -> Screen.Review
+    stayInVoiceConversation -> current
+    !addressVerified && completedLedoCount >= 3 -> Screen.Address
+    else -> current
 }

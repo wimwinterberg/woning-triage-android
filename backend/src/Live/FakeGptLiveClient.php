@@ -17,7 +17,7 @@ final class FakeGptLiveClient implements GptLiveClient
 
         return new LiveSessionResult(
             'prov_fake_'.bin2hex(random_bytes(4)),
-            "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=WoningtriageFake\r\nt=0 0\r\n",
+            FakeSdp::answerFromOffer($sdpOffer),
             true,
         );
     }

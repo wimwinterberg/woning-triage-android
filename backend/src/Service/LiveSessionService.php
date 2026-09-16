@@ -38,7 +38,9 @@ final class LiveSessionService
         $session->markActive();
         $this->events->publish($intake, 'voice_session.updated', ['voice_session_id' => $session->getId(), 'status' => $session->getStatus()]);
         $this->entityManager->flush();
-        $this->gatewayQueue->enqueue($session->getId());
+        if (!$result->fake) {
+            $this->gatewayQueue->enqueue($session->getId());
+        }
 
         return $session;
     }

@@ -112,7 +112,7 @@ paths:
         - $ref: "#/components/parameters/IntakeId"
         - $ref: "#/components/parameters/IdempotencyKey"
       responses:
-        "201": { description: SDP answer }
+        "201": { description: SDP answer plus live=true only for a real GPT-Live session }
         "503": { description: GPT-Live unavailable }
   /intakes/{id}/voice-sessions/{sessionId}:
     get:

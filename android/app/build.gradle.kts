@@ -16,7 +16,8 @@ android {
         versionCode = 1
         versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        val backendUrl = project.findProperty("BACKEND_URL") as String? ?: "http://10.0.2.2:8000/"
+        val backendUrl = (project.findProperty("BACKEND_URL") as String? ?: "http://10.0.2.2:8000/")
+            .let { if (it.endsWith("/")) it else "$it/" }
         buildConfigField("String", "BACKEND_URL", "\"$backendUrl\"")
         buildConfigField("boolean", "ALLOW_CLEARTEXT", "true")
     }

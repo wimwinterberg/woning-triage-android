@@ -239,6 +239,34 @@ final class IntakeDocument
         return $this->addressVerificationStatus() === 'verified';
     }
 
+    public function clearUnverifiedAddress(): void
+    {
+        if ($this->isAddressVerified()) {
+            return;
+        }
+        $revision = (int) ($this->address['address_revision'] ?? 0) + 1;
+        $this->pendingAddressQuestionId = null;
+        $this->invalidateSummary();
+        $this->address = [
+            'postcode' => null,
+            'house_number' => null,
+            'addition' => null,
+            'street' => null,
+            'city' => null,
+            'country_code' => 'NL',
+            'lookup_id' => null,
+            'candidate_id' => null,
+            'address_revision' => $revision,
+            'verification_status' => 'missing',
+            'verified_at' => null,
+            'candidates' => [],
+            'confirmation_channel' => null,
+            'evidence_message_id' => null,
+            'lookup_at' => null,
+            'provider' => null,
+        ];
+    }
+
     /**
      * @param array<string, mixed> $input
      */
@@ -247,8 +275,8 @@ final class IntakeDocument
         $previous = $this->address;
         $revision = (int) ($previous['address_revision'] ?? 0);
         $changed = $previous === null
-            || ($previous['postcode'] ?? null) !== $input['postcode']
-            || (int) ($previous['house_number'] ?? 0) !== (int) $input['house_number']
+            || ($previous['postcode'] ?? null) !== ($input['postcode'] ?? null)
+            || ($previous['house_number'] ?? null) !== ($input['house_number'] ?? null)
             || ($previous['addition'] ?? null) !== ($input['addition'] ?? null);
 
         if ($changed) {

@@ -202,11 +202,12 @@ Voorgestelde response `201`:
   "status": "connecting",
   "transport": "webrtc",
   "sdp_answer": "<SDP returned through the backend>",
-  "expires_at": "2026-09-15T12:15:00Z"
+  "expires_at": "2026-09-15T12:15:00Z",
+  "live": false
 }
 ```
 
-Het tijdstip is illustratief, geen OpenAI-sessielimiet. De backend stelt het in volgens de feitelijke provider- en projectconfiguratie. Een verlopen verbinding vraagt een nieuwe sessie; een nieuwe SDP-offer krijgt een nieuwe idempotentiesleutel.
+`live` is `true` alleen bij een echte GPT-Live-sessie (`OPENAI_API_KEY` gezet). `false` betekent een stub-SDP; de app mag dat niet als remote answer toepassen. Het tijdstip is illustratief, geen OpenAI-sessielimiet. De backend stelt het in volgens de feitelijke provider- en projectconfiguratie. Een verlopen verbinding vraagt een nieuwe sessie; een nieuwe SDP-offer krijgt een nieuwe idempotentiesleutel.
 
 Statussen: `connecting`, `active`, `closing`, `closed`, `failed`. Maximaal één niet-afgesloten voice session per intake. Bij een nieuwe verbinding worden oude sessies expliciet beëindigd; niet stilzwijgend naast elkaar gehouden. De backend leest bij start de actuele dossiercontext, dus er is geen `expected_revision` nodig.
 

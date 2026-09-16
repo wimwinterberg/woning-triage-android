@@ -111,6 +111,7 @@ data class VoiceSession(
     val transport: String,
     @SerialName("sdp_answer") val sdpAnswer: String? = null,
     @SerialName("expires_at") val expiresAt: String? = null,
+    val live: Boolean = false,
 )
 
 @Serializable

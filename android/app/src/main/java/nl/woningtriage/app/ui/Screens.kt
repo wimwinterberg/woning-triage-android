@@ -136,6 +136,7 @@ private fun ConversationScreen(state: AppUiState, viewModel: AppViewModel) {
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Transcript(state.transcript)
             LedoCard(state.intake, onField = viewModel::openField)
+            AddressCandidatesCard(state.intake, onVerify = viewModel::verifyCandidate)
             OutlinedButton(onClick = viewModel::goAddress) { Text(stringResource(R.string.lookup_address)) }
         }
         if (tablet) {
@@ -256,6 +257,24 @@ private fun Transcript(lines: List<TranscriptLine>) {
                 Column(Modifier.padding(12.dp)) {
                     Text(line.speaker, style = MaterialTheme.typography.labelMedium)
                     Text(line.text)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddressCandidatesCard(intake: Intake?, onVerify: (String) -> Unit) {
+    val candidates = intake?.address?.candidates.orEmpty()
+    if (candidates.isEmpty()) {
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        candidates.forEach { candidate ->
+            Card(Modifier.fillMaxWidth().clickable { onVerify(candidate.candidateId) }) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(candidate.displayAddress, style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.verify_address), style = MaterialTheme.typography.labelLarge)
                 }
             }
         }

@@ -1,9 +1,10 @@
 # yaml-language-server: $schema=../vendor/symfony/dependency-injection/Loader/schema/services.schema.json
 parameters:
     app.tree_dir: '%kernel.project_dir%/config/trees'
-    app.prompt_version: 'conversation-v1'
+    app.prompt_version: 'conversation-v6'
     app.live_model: 'gpt-live-1'
     env(OPENAI_API_KEY): ''
+    env(WCS_ADDRESS_API_KEY): ''
 
 services:
     _defaults:
@@ -25,9 +26,9 @@ services:
         arguments:
             $treeDirectory: '%app.tree_dir%'
 
-    App\Live\LiveGatewayCommandQueue:
+    App\Command\ReleaseCommand:
         arguments:
-            $directory: '%kernel.project_dir%/var/live-gateway'
+            $treeDirectory: '%app.tree_dir%'
 
     App\Service\IntakeService:
         arguments:
@@ -38,22 +39,26 @@ services:
             $apiKey: '%env(default::OPENAI_API_KEY)%'
             $model: '%app.live_model%'
 
+    App\Live\GptLiveClient:
+        factory: ['App\Live\GptLiveClientFactory', 'create']
+        arguments:
+            $http: '@App\Live\HttpGptLiveClient'
+            $fake: '@App\Live\FakeGptLiveClient'
+            $apiKey: '%env(default::OPENAI_API_KEY)%'
+
     App\Command\LiveGatewayCommand:
         arguments:
             $apiKey: '%env(default::OPENAI_API_KEY)%'
 
     App\Analyzer\IntakeAnalyzer: '@App\Analyzer\HeuristicIntakeAnalyzer'
-    App\Live\GptLiveClient: '@App\Live\HttpGptLiveClient'
-    App\Address\AddressProvider: '@App\Address\PdokAddressProvider'
     App\Address\FakeAddressProvider:
         public: true
+    App\Address\WcsAddressProvider:
+        arguments:
+            $apiKey: '%env(default::WCS_ADDRESS_API_KEY)%'
+    App\Address\AddressProvider: '@App\Address\WcsAddressProvider'
 
 when@test:
-    services:
-        App\Live\GptLiveClient: '@App\Live\FakeGptLiveClient'
-        App\Address\AddressProvider: '@App\Address\FakeAddressProvider'
-
-when@dev:
     services:
         App\Live\GptLiveClient: '@App\Live\FakeGptLiveClient'
         App\Address\AddressProvider: '@App\Address\FakeAddressProvider'

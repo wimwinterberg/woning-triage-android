@@ -8,6 +8,7 @@ Een zelfstandige Android-app die bewoners via een gesproken of getypt gesprek he
 
 | Document | Inhoud |
 | --- | --- |
+| [Hoe het werkt (HTML)](docs/HOE_HET_WERKT.html) | Flowdiagrammen: spraak, GPT-Live, delegatie, WCS, afronden |
 | [Projectoverzicht](docs/PROJECT_OVERVIEW.md) | Doel, scope, architectuur |
 | [Android-app](docs/ANDROID_SPEC.md) | Schermen en acceptatie |
 | [Symfony-backend](docs/BACKEND_SPEC.md) | Diensten en GPT-Live |
@@ -15,15 +16,112 @@ Een zelfstandige Android-app die bewoners via een gesproken of getypt gesprek he
 | [API-contract](docs/API_CONTRACT.md) | App ↔ backend |
 | [OpenAPI](docs/openapi.yaml) | Machineleesbaar contract |
 | [Technische keuzes](docs/IMPLEMENTATION.md) | Vastgelegde v1-keuzes |
+| [DigitalOcean](docs/DIGITALOCEAN.md) | App Platform-deploy van de Symfony-API |
 | [Acceptatie](docs/ACCEPTANCE.md) | Scenario's |
 
 ## Vereisten
 
-- PHP 8.4, Composer, PostgreSQL 16
+- PHP 8.4, Composer, PostgreSQL 16 **of** Docker Compose
 - JDK 17, Android SDK (compileSdk 35) voor de app
 - Optioneel: `OPENAI_API_KEY` met GPT-Live-toegang
+- Optioneel: `WCS_ADDRESS_API_KEY` voor live postcode-lookup (We Create Solutions)
 
-## Backend starten
+## Backend starten met Docker
+
+```bash
+cd backend
+cp -n .env.example .env
+docker compose up --build
+```
+
+De API luistert op http://127.0.0.1:8000 (`GET /health` moet `{"status":"ok"}` teruggeven).
+
+In een tweede terminal:
+
+```bash
+cd backend
+docker compose exec api php bin/console woningtriage:create-user --label=pilot
+```
+
+Spraak (GPT-Live) vereist `OPENAI_API_KEY` in `backend/.env` (Compose leest dat bestand; `.env.local` alleen is niet genoeg). Zonder key blijft **typen** werken. De worker blijft idle en logt geen `Skipping voice_…`. De app past geen fake-SDP toe, zodat WebRTC niet crasht op m-line-volgorde.
+
+Adreslookup gebruikt de We Create Solutions Address API. Zet `WCS_ADDRESS_API_KEY` in hetzelfde `backend/.env`. Zonder key geeft een echte postcode `503` (niet een nepstraat). CI gebruikt de fake provider.
+
+Na git pull moet in `docker compose logs api` de regel `WONINGTRIAGE_ENTRYPOINT=2` staan. Zo niet, dan draait nog de oude container.
+
+```bash
+cd backend
+docker compose --profile live down
+docker compose --profile live up --force-recreate
+```
+
+Poort 8000 bezet? `HTTP_PORT=8080 docker compose up --build`.  
+Postgres is alleen bereikbaar in het Docker-netwerk (niet op localhost:5432), zodat een lokale PostgreSQL niet botst. Inspecteren: `docker compose exec database psql -U woningtriage`.
+
+Stoppen: `docker compose down`. Data blijft in het volume `database_data`.
+
+## Logs (spraak / “Gegevens verwerken”)
+
+Spraak loopt via OpenAI-WebRTC. **Verwerken** (LEDO bijwerken) gebeurt in de worker `live-gateway`, niet in de HTTP-API. Typen gaat wel via `api`.
+
+In een tweede terminal:
+
+```bash
+cd backend
+docker compose --profile live logs -f --timestamps live-gateway api
+```
+
+Alleen de worker (delegatie, transcript, analysetijd):
+
+```bash
+docker compose --profile live logs -f --timestamps live-gateway
+```
+
+Alleen HTTP (typen, voice-session starten), met duur in milliseconden:
+
+```bash
+docker compose logs -f --timestamps api
+```
+
+Na een codewijziging in de gateway de worker herstarten (het PHP-proces houdt anders het oude script):
+
+```bash
+docker compose --profile live up -d --force-recreate live-gateway
+```
+
+## Telefoon via ngrok
+
+De emulator gebruikt `http://10.0.2.2:8000/`. Een echte telefoon op 4G/wifi (niet hetzelfde LAN) bereikt je computer niet. Tunnel de API met [ngrok](https://ngrok.com/download).
+
+1. Start de backend (`docker compose up --build` of `php -S 127.0.0.1:8000 -t public`).
+2. Account + authtoken: [dashboard.ngrok.com](https://dashboard.ngrok.com/get-started/your-authtoken), daarna `ngrok config add-authtoken <token>`.
+3. Tunnel:
+
+```bash
+ngrok http 8000
+```
+
+Of via Docker (zelfde token in `backend/.env` als `NGROK_AUTHTOKEN=...`):
+
+```bash
+cd backend
+docker compose --profile ngrok up --build
+```
+
+De publieke HTTPS-URL staat in de ngrok-terminal of op http://127.0.0.1:4040 (eindigt op `.ngrok-free.app`).
+
+4. Bouw de app met die URL (slash op het eind mag ontbreken):
+
+```bash
+cd android
+./gradlew assembleDebug -PBACKEND_URL=https://JOUW-ID.ngrok-free.app/
+```
+
+Installeer `android/app/build/outputs/apk/debug/app-debug.apk` op de telefoon. Activatiecode: `docker compose exec api php bin/console woningtriage:create-user --label=pilot`.
+
+De debug-app stuurt `ngrok-skip-browser-warning` mee, anders antwoordt het gratis ngrok-plan met een HTML-waarschuwing in plaats van JSON. De tunnel is publiek zolang ngrok draait; deel de URL niet.
+
+## Backend starten zonder Docker
 
 ```bash
 cd backend
@@ -82,6 +180,10 @@ Standaard backend-URL is `http://10.0.2.2:8000/` (emulator). Override:
 
 Eerste start: voer de activatiecode in. Kies **Probleem melden** (spraak, microfoontoestemming) of **Liever typen**.
 
+## DigitalOcean App Platform
+
+De API is deploybaar op App Platform (PHP-buildpack, document root `public/`, managed PostgreSQL 16). Spec: `.do/app.yaml`. Stappen, secrets en de Android-`BACKEND_URL` staan in [docs/DIGITALOCEAN.md](docs/DIGITALOCEAN.md).
+
 ## Wat v1 wel en niet bewijst
 
 | Onderdeel | Status |
@@ -91,7 +193,7 @@ Eerste start: voer de activatiecode in. Kies **Probleem melden** (spraak, microf
 | Idempotentie, eigendom, geen `planning_duration` in API/report | Getest |
 | Nederlandse opening / Engelse zin / “okay” | Heuristic analyzer + API-test |
 | GPT-Live WebRTC end-to-end | **Niet live bewezen** zonder account |
-| PDOK live lookup | Geïmplementeerd; CI gebruikt fake |
+| WCS Address API lookup (NL) | Geïmplementeerd (gemockte HTTP-tests); live niet bewezen zonder key |
 | Productieboom 53 MB | Ontbreekt; fixture + importer aanwezig |
 | Spoedbeleid / echte medewerker | Open (OPEN-02); demo claimt geen inschakeling |
 

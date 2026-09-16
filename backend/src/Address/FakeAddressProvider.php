@@ -7,8 +7,7 @@ namespace App\Address;
 use App\Exception\AddressLookupUnavailableException;
 
 /**
- * In-memory provider for tests and local development without PDOK.
- * Never presents these values as live BAG results.
+ * In-memory provider for tests. Never presents these values as live BAG results.
  */
 final class FakeAddressProvider implements AddressProvider
 {

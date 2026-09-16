@@ -1,0 +1,3 @@
+web: heroku-php-nginx -C nginx_app.conf public/
+release: php bin/console woningtriage:release --no-interaction --env=prod
+worker: php bin/console woningtriage:live-gateway --env=prod

@@ -1,25 +1,106 @@
-
 services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${HTTP_PORT:-8000}:8000"
+    entrypoint: ["/bin/sh", "/app/docker/entrypoint.sh"]
+    command: ["/bin/sh", "/app/docker/run-api.sh"]
+    environment:
+      # Ignore APP_ENV=prod from backend/.env (App Platform). php -S + debug turns
+      # "headers already sent" into a second JSON body the Android app cannot parse.
+      APP_ENV: dev
+      APP_DEBUG: "0"
+      APP_SECRET: ${APP_SECRET:-change-me}
+      DEFAULT_URI: http://localhost:8000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-woningtriage}:${POSTGRES_PASSWORD:-woningtriage}@database:5432/${POSTGRES_DB:-woningtriage}?serverVersion=16&charset=utf8
+      CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN:-^https?://(localhost|127\\.0\\.0\\.1)(:[0-9]+)?$$|^https://[a-z0-9.-]+\\.ngrok(-free)?\\.(app|dev|io)$$}
+      # Interpolated from backend/.env (not .env.local). Recreate after changing keys.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      WCS_ADDRESS_API_KEY: ${WCS_ADDRESS_API_KEY:-}
+      OPENAI_LIVE_MODEL: ${OPENAI_LIVE_MODEL:-gpt-live-1}
+      MESSENGER_TRANSPORT_DSN: doctrine://default?auto_setup=0
+    volumes:
+      - ./:/app
+      - api_var_cache:/app/var/cache
+      - composer_cache:/root/.composer/cache
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "php",
+          "-r",
+          "exit(str_contains((string) @file_get_contents('http://127.0.0.1:8000/health'), '\"status\":\"ok\"') ? 0 : 1);",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 45s
+
+  live-gateway:
+    profiles: ["live"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["/bin/sh", "/app/docker/entrypoint.sh"]
+    command: ["/bin/sh", "/app/docker/run-live-gateway.sh"]
+    environment:
+      APP_ENV: dev
+      APP_DEBUG: "0"
+      APP_SECRET: ${APP_SECRET:-change-me}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-woningtriage}:${POSTGRES_PASSWORD:-woningtriage}@database:5432/${POSTGRES_DB:-woningtriage}?serverVersion=16&charset=utf8
+      # Same backend/.env interpolation as api. Recreate after changing keys.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      WCS_ADDRESS_API_KEY: ${WCS_ADDRESS_API_KEY:-}
+      OPENAI_LIVE_MODEL: ${OPENAI_LIVE_MODEL:-gpt-live-1}
+      SKIP_RELEASE: "1"
+    volumes:
+      - ./:/app
+      - live_gateway_var_cache:/app/var/cache
+      - composer_cache:/root/.composer/cache
+    tty: true
+    depends_on:
+      database:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  ngrok:
+    profiles: ["ngrok"]
+    image: ngrok/ngrok:latest
+    command: http --log stdout http://api:8000
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    ports:
+      - "4040:4040"
+    depends_on:
+      api:
+        condition: service_healthy
+
 ###> doctrine/doctrine-bundle ###
   database:
     image: postgres:${POSTGRES_VERSION:-16}-alpine
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-app}
-      # You should definitely change the password in production
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-!ChangeMe!}
-      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-woningtriage}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-woningtriage}
+      POSTGRES_USER: ${POSTGRES_USER:-woningtriage}
     healthcheck:
-      test: ["CMD", "pg_isready", "-d", "${POSTGRES_DB:-app}", "-U", "${POSTGRES_USER:-app}"]
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
       timeout: 5s
       retries: 5
-      start_period: 60s
+      start_period: 10s
     volumes:
       - database_data:/var/lib/postgresql/data:rw
-      # You may use a bind-mounted host directory instead, so that it is harder to accidentally remove the volume and lose all your data!
-      # - ./docker/db/data:/var/lib/postgresql/data:rw
 ###< doctrine/doctrine-bundle ###
 
 volumes:
+  composer_cache:
+  api_var_cache:
+  live_gateway_var_cache:
 ###> doctrine/doctrine-bundle ###
   database_data:
 ###< doctrine/doctrine-bundle ###

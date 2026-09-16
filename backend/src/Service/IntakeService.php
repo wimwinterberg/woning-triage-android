@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Address\AddressLookupLogger;
 use App\Address\AddressProvider;
 use App\Analyzer\IntakeAnalyzer;
 use App\Analyzer\ProposalValidator;
 use App\Classification\ClassificationSearchService;
 use App\Domain\AddressNormalizer;
+use App\Domain\DutchPostcodeParser;
 use App\Domain\FieldName;
 use App\Domain\IdGenerator;
 use App\Domain\IntakeStatus;
@@ -29,6 +31,8 @@ use App\Exception\ValidationFailedException;
 use App\Tree\DecisionTreeEngine;
 use App\Tree\TreeRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 final class IntakeService
 {
@@ -47,6 +51,8 @@ final class IntakeService
         private readonly SummaryComposer $summaryComposer,
         private readonly ClassificationSearchService $classificationSearch,
         private readonly string $promptVersion,
+        private readonly LoggerInterface $logger = new NullLogger(),
+        private readonly AddressLookupLogger $addressLookupLogger = new AddressLookupLogger(),
     ) {
     }
 
@@ -138,7 +144,15 @@ final class IntakeService
             }
 
             $document = $intake->document();
-            $this->maybeConfirmPending($intake, $document, $text, $messageId, $proposal->explicitConfirmationAttempt);
+            $spokenYes = $this->isSpokenYes($text, $proposal->explicitConfirmationAttempt);
+            $wasOnSummary = $this->isOnSpokenSummaryQuestion($document);
+            if ($this->shouldConfirmSpokenSummary($intake, $document, $spokenYes)) {
+                $this->confirmSpokenReport($intake, $document, $task, $messageId);
+
+                return;
+            }
+
+            $this->maybeConfirmPendingAddress($document, $text, $messageId, $spokenYes);
             $document->applyProposalUpdates($proposal->fieldUpdates);
             foreach ($proposal->hypotheses as $hypothesis) {
                 $document->hypotheses[] = array_merge(['id' => IdGenerator::prefixed('hyp')], $hypothesis);
@@ -151,13 +165,39 @@ final class IntakeService
                 $document->invalidateSummary();
             }
 
-            if ($proposal->addressHint !== null) {
-                $this->applyAddressHint($intake, $document, $proposal->addressHint);
+            $hint = $proposal->addressHint;
+            if ($hint === null && DutchPostcodeParser::claimsSingleAddress($text)) {
+                $hint = [
+                    'postcode' => null,
+                    'house_number' => null,
+                    'addition' => null,
+                    'street' => null,
+                    'unique_claim' => true,
+                ];
+            }
+            if ($this->shouldRestartAddress($document, $text, $hint)) {
+                $this->restartUnverifiedAddress($intake, $document);
+            }
+            if ($hint !== null) {
+                $this->applyAddressHint($intake, $document, $hint);
             }
 
             $this->refreshNextQuestion($intake, $document);
             $intake->replaceDocument($document);
             $intake->bumpRevision();
+            if ($this->shouldOfferSpokenSummary($intake, $document)) {
+                $this->writeSummaryDocument($intake, $document);
+                $this->presentSummaryQuestion($intake, $document);
+                $intake->replaceDocument($document);
+            } elseif ($document->summary !== null && $intake->getStatus() === IntakeStatus::ReadyForConfirmation) {
+                $this->presentSummaryQuestion($intake, $document);
+                $intake->replaceDocument($document);
+            }
+            if ($spokenYes && $wasOnSummary && $document->summary !== null && !$intake->getStatus()->isLocked()) {
+                $this->confirmSpokenReport($intake, $document, $task, $messageId);
+
+                return;
+            }
             $task->succeed($intake->getRevision());
             $this->maybeAddAssistantQuestion($intake, $document);
             $this->events->publish($intake, 'intake.updated');
@@ -264,6 +304,13 @@ final class IntakeService
             $this->addressProvider->lookup($normalizedPostcode, $normalizedNumber, $normalizedAddition),
         );
         $lookupId = IdGenerator::prefixed('lookup');
+        $this->addressLookupLogger->log('intake_stored', [
+            'intake_id' => $intake->getId(),
+            'source' => 'ui',
+            'provider' => $this->addressProvider::class,
+            'candidate_count' => count($candidates),
+            'has_addition_filter' => $normalizedAddition !== null,
+        ]);
         $document = $intake->document();
         $document->recordAddressInput([
             'postcode' => $normalizedPostcode,
@@ -356,26 +403,11 @@ final class IntakeService
         $this->entityManager->persist($task);
         $this->entityManager->flush();
 
-        $texts = $this->summaryComposer->compose($intake);
-        $summaryId = IdGenerator::prefixed('summary');
         $document = $intake->document();
         $intake->bumpRevision();
-        $document->setSummary([
-            'id' => $summaryId,
-            'source_revision' => $intake->getRevision(),
-            'language' => $intake->getConversationLanguage(),
-            'resident_text' => $texts['resident_text'],
-            'work_description_nl' => $texts['work_description_nl'],
-        ]);
-        $matches = $this->classificationSearch->suggest($intake);
-        if ($matches !== []) {
-            $document->classification = [
-                'tree_version' => $intake->getTreeVersion(),
-                'candidates' => $matches,
-            ];
-        }
+        $texts = $this->writeSummaryDocument($intake, $document);
+        $this->presentSummaryQuestion($intake, $document);
         $intake->replaceDocument($document);
-        $intake->setStatus(IntakeStatus::ReadyForConfirmation);
         $task->succeed($intake->getRevision());
         $this->addAssistantMessage($intake, $texts['resident_text']);
         $this->events->publish($intake, 'intake.updated');
@@ -579,8 +611,50 @@ final class IntakeService
         if (!is_array($address) || ($address['verification_status'] ?? '') === 'verified') {
             return;
         }
-        $candidates = $address['candidates'] ?? [];
         $nl = str_starts_with($language, 'nl');
+        $postcode = is_string($address['postcode'] ?? null) ? trim((string) $address['postcode']) : '';
+        $houseNumber = $address['house_number'] ?? null;
+        $hasNumber = is_int($houseNumber) ? $houseNumber > 0 : (is_numeric($houseNumber) && (int) $houseNumber > 0);
+        $candidates = $this->candidateList($address['candidates'] ?? []);
+        $lookupId = $address['lookup_id'] ?? null;
+        $lookedUp = is_string($lookupId) && $lookupId !== '';
+
+        if ($postcode !== '' && !$hasNumber) {
+            $document->nextQuestion = [
+                'id' => 'address_ask_house_number',
+                'target' => 'address',
+                'text' => $nl
+                    ? 'Wat is het huisnummer van de woning?'
+                    : 'What is the house number of the home?',
+            ];
+
+            return;
+        }
+        if ($postcode === '' && $hasNumber) {
+            $document->nextQuestion = [
+                'id' => 'address_ask_postcode',
+                'target' => 'address',
+                'text' => $nl
+                    ? 'Wat is de postcode? Vier cijfers en twee letters; letters mag u spellen, zoals Simon Johan voor SJ.'
+                    : 'What is the postcode? Four digits and two letters; you may spell the letters, for example Simon Johan for SJ.',
+            ];
+
+            return;
+        }
+        if ($postcode === '' || !$hasNumber) {
+            return;
+        }
+        if (!$lookedUp) {
+            $document->nextQuestion = [
+                'id' => 'address_lookup_unavailable',
+                'target' => 'address',
+                'text' => $nl
+                    ? 'Het adres kon even niet worden opgezocht. Zeg de postcode en het huisnummer nog eens.'
+                    : 'The address could not be looked up just now. Please say the postcode and house number again.',
+            ];
+
+            return;
+        }
         if ($candidates === []) {
             $document->nextQuestion = [
                 'id' => 'address_no_match',
@@ -589,6 +663,10 @@ final class IntakeService
                     ? 'Er is geen adres gevonden. Controleer postcode, huisnummer en eventuele toevoeging.'
                     : 'No address was found. Please check the postcode, house number and any addition.',
             ];
+            $this->addressLookupLogger->log('follow_up', [
+                'question_id' => 'address_no_match',
+                'candidate_count' => 0,
+            ]);
 
             return;
         }
@@ -603,6 +681,10 @@ final class IntakeService
                     ? 'Is dit uw adres: '.$display.'?'
                     : 'Is this your address: '.$display.'?',
             ];
+            $this->addressLookupLogger->log('follow_up', [
+                'question_id' => 'address_confirm',
+                'candidate_count' => 1,
+            ]);
 
             return;
         }
@@ -614,28 +696,126 @@ final class IntakeService
                 ? 'Er zijn meerdere adressen gevonden. Kies de juiste toevoeging.'
                 : 'Several addresses were found. Please choose the correct addition.',
         ];
+        $this->addressLookupLogger->log('follow_up', [
+            'question_id' => 'address_select',
+            'candidate_count' => count($candidates),
+        ]);
     }
 
     /**
-     * @param array{postcode: string, house_number: int, addition: ?string} $hint
+     * @param array{postcode: ?string, house_number: ?int, addition: ?string, street?: ?string, unique_claim?: bool} $hint
      */
     private function applyAddressHint(Intake $intake, \App\Domain\IntakeDocument $document, array $hint): void
     {
-        try {
-            $postcode = $this->addressNormalizer->normalizePostcode($hint['postcode']);
-            $number = $this->addressNormalizer->normalizeHouseNumber($hint['house_number']);
-            $addition = $this->addressNormalizer->normalizeAddition($hint['addition'] ?? null);
-        } catch (\InvalidArgumentException) {
+        $existing = is_array($document->address) ? $document->address : [];
+        if (($existing['verification_status'] ?? '') === 'verified') {
             return;
         }
+
+        $postcode = $this->mergePostcode($hint['postcode'] ?? null, $existing['postcode'] ?? null);
+        $incomingNumber = $hint['house_number'] ?? null;
+        $number = null;
+        if (is_int($incomingNumber) && $incomingNumber > 0) {
+            try {
+                $number = $this->addressNormalizer->normalizeHouseNumber($incomingNumber);
+            } catch (\InvalidArgumentException) {
+                $number = null;
+            }
+        } elseif ($postcode !== null && $postcode === ($existing['postcode'] ?? null)) {
+            $existingNumber = $existing['house_number'] ?? null;
+            $number = is_int($existingNumber) ? $existingNumber : (is_numeric($existingNumber) ? (int) $existingNumber : null);
+            if ($number !== null && $number < 1) {
+                $number = null;
+            }
+        }
+
+        $incomingAddition = $hint['addition'] ?? null;
+        $addition = null;
+        try {
+            if (is_string($incomingAddition) && trim($incomingAddition) !== '') {
+                $addition = $this->addressNormalizer->normalizeAddition($incomingAddition);
+            } elseif ($postcode === ($existing['postcode'] ?? null) && $number === ($existing['house_number'] ?? null)) {
+                $addition = $this->addressNormalizer->normalizeAddition(
+                    is_string($existing['addition'] ?? null) ? (string) $existing['addition'] : null,
+                );
+            }
+        } catch (\InvalidArgumentException) {
+            $addition = null;
+        }
+
+        $this->addressLookupLogger->log('hint', [
+            'intake_id' => $intake->getId(),
+            'provider' => $this->addressProvider::class,
+            'has_postcode' => $postcode !== null,
+            'has_house_number' => $number !== null,
+            'house_number_digits' => $number !== null ? strlen((string) $number) : 0,
+            'has_addition' => $addition !== null,
+            'has_street' => is_string($hint['street'] ?? null) && trim((string) $hint['street']) !== '',
+            'unique_claim' => (bool) ($hint['unique_claim'] ?? false),
+        ]);
+
+        if ($postcode === null && $number === null) {
+            return;
+        }
+
+        if ($postcode === null || $number === null) {
+            $document->recordAddressInput([
+                'postcode' => $postcode,
+                'house_number' => $number,
+                'addition' => $addition,
+                'lookup_id' => null,
+                'candidates' => [],
+                'lookup_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format(DATE_ATOM),
+                'provider' => 'configured',
+            ]);
+
+            return;
+        }
+
         try {
             $candidates = array_map(
                 static fn ($candidate): array => $candidate->toArray(),
                 $this->addressProvider->lookup($postcode, $number, $addition),
             );
         } catch (\App\Exception\AddressLookupUnavailableException) {
+            $this->addressLookupLogger->log('unavailable', [
+                'intake_id' => $intake->getId(),
+                'provider' => $this->addressProvider::class,
+                'candidate_count' => 0,
+                'source' => 'voice',
+            ]);
+            $this->logger->info('Address lookup unavailable', [
+                'intake_id' => $intake->getId(),
+                'candidate_count' => null,
+            ]);
+            $document->recordAddressInput([
+                'postcode' => $postcode,
+                'house_number' => $number,
+                'addition' => $addition,
+                'lookup_id' => null,
+                'candidates' => [],
+                'lookup_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format(DATE_ATOM),
+                'provider' => 'configured',
+            ]);
+
             return;
         }
+
+        $beforeNarrow = count($candidates);
+        $candidates = $this->narrowCandidates($candidates, $postcode, $number, $hint);
+        $this->addressLookupLogger->log('intake_stored', [
+            'intake_id' => $intake->getId(),
+            'source' => 'voice',
+            'provider' => $this->addressProvider::class,
+            'candidate_count' => count($candidates),
+            'narrowed_from' => $beforeNarrow,
+            'preferred_plain' => $beforeNarrow > 1 && count($candidates) === 1,
+            'unique_claim' => (bool) ($hint['unique_claim'] ?? false),
+        ]);
+        $this->logger->info('Address lookup finished', [
+            'intake_id' => $intake->getId(),
+            'candidate_count' => count($candidates),
+        ]);
         $document->recordAddressInput([
             'postcode' => $postcode,
             'house_number' => $number,
@@ -647,37 +827,381 @@ final class IntakeService
         ]);
     }
 
-    private function maybeConfirmPending(
-        Intake $intake,
+    /**
+     * @param list<array<string, mixed>> $candidates
+     * @param array{postcode: ?string, house_number: ?int, addition: ?string, street?: ?string, unique_claim?: bool} $hint
+     * @return list<array<string, mixed>>
+     */
+    private function narrowCandidates(array $candidates, string $postcode, int $number, array $hint): array
+    {
+        $matched = [];
+        foreach ($candidates as $candidate) {
+            if (!is_array($candidate)) {
+                continue;
+            }
+            $candidateNumber = (int) ($candidate['house_number'] ?? 0);
+            $candidatePostcode = (string) ($candidate['postcode'] ?? '');
+            if ($candidateNumber !== $number || !AddressNormalizer::samePostcode($candidatePostcode, $postcode)) {
+                continue;
+            }
+            $matched[] = $candidate;
+        }
+
+        $street = is_string($hint['street'] ?? null) ? trim((string) $hint['street']) : '';
+        if ($street !== '' && $matched !== []) {
+            $byStreet = [];
+            foreach ($matched as $candidate) {
+                if ($this->streetsMatch($street, (string) ($candidate['street'] ?? ''))) {
+                    $byStreet[] = $candidate;
+                }
+            }
+            if ($byStreet !== []) {
+                $matched = $byStreet;
+            }
+        }
+
+        $additionSpecified = is_string($hint['addition'] ?? null) && trim((string) $hint['addition']) !== '';
+        if (!$additionSpecified && count($matched) > 1) {
+            $plain = [];
+            foreach ($matched as $candidate) {
+                $addition = $candidate['addition'] ?? null;
+                if ($addition === null || $addition === '') {
+                    $plain[] = $candidate;
+                }
+            }
+            if (count($plain) === 1) {
+                $matched = $plain;
+            } elseif ((bool) ($hint['unique_claim'] ?? false) && $plain !== []) {
+                $matched = $plain;
+            }
+        }
+
+        return $this->uniqueCandidates($matched);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $candidates
+     * @return list<array<string, mixed>>
+     */
+    private function uniqueCandidates(array $candidates): array
+    {
+        $seen = [];
+        $unique = [];
+        foreach ($candidates as $candidate) {
+            $key = strtolower(trim((string) ($candidate['display_address'] ?? '')));
+            if ($key === '') {
+                $key = implode(':', [
+                    AddressNormalizer::compactPostcode((string) ($candidate['postcode'] ?? '')),
+                    (string) ($candidate['house_number'] ?? ''),
+                    strtolower(trim((string) ($candidate['street'] ?? ''))),
+                    strtolower(trim((string) ($candidate['addition'] ?? ''))),
+                ]);
+            }
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $unique[] = $candidate;
+        }
+
+        return $unique;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function candidateList(mixed $candidates): array
+    {
+        if (!is_array($candidates) || $candidates === []) {
+            return [];
+        }
+        if (array_is_list($candidates)) {
+            $list = [];
+            foreach ($candidates as $candidate) {
+                if (is_array($candidate)) {
+                    $list[] = $candidate;
+                }
+            }
+
+            return $list;
+        }
+        if (isset($candidates['candidate_id']) || isset($candidates['display_address'])) {
+            return [$candidates];
+        }
+
+        return [];
+    }
+
+    private function streetsMatch(string $spoken, string $candidate): bool
+    {
+        $left = $this->streetKey($spoken);
+        $right = $this->streetKey($candidate);
+        if ($left === '' || $right === '') {
+            return false;
+        }
+        if ($left === $right) {
+            return true;
+        }
+        if (str_starts_with($left, $right) || str_starts_with($right, $left)) {
+            return true;
+        }
+
+        return levenshtein($left, $right) <= 3 && min(strlen($left), strlen($right)) >= 6;
+    }
+
+    private function streetKey(string $name): string
+    {
+        $folded = mb_strtolower($name);
+        $folded = str_replace(['ë', 'é', 'è', 'ï'], ['e', 'e', 'e', 'i'], $folded);
+        $folded = preg_replace('/[^a-z]/', '', $folded) ?? $folded;
+
+        return preg_replace('/(straat|laan|weg|plein|gracht|kade|singel|hof|dreef|pad|steeg|dijk|baan)$/', '', $folded) ?? $folded;
+    }
+
+    /**
+     * @param array{postcode: ?string, house_number: ?int, addition: ?string, street?: ?string, unique_claim?: bool}|null $hint
+     */
+    private function shouldRestartAddress(\App\Domain\IntakeDocument $document, string $text, ?array $hint): bool
+    {
+        if ($document->isAddressVerified() || !$this->isAddressFollowUp($document)) {
+            return false;
+        }
+        if ($this->isAddressRejection($text)) {
+            return true;
+        }
+        $incoming = is_string($hint['postcode'] ?? null) ? trim((string) $hint['postcode']) : '';
+        $existing = is_string($document->address['postcode'] ?? null) ? trim((string) $document->address['postcode']) : '';
+        if ($incoming === '' || $existing === '') {
+            return false;
+        }
+
+        return !AddressNormalizer::samePostcode($incoming, $existing);
+    }
+
+    private function isAddressFollowUp(\App\Domain\IntakeDocument $document): bool
+    {
+        $id = (string) ($document->nextQuestion['id'] ?? '');
+        if ($id === '') {
+            return false;
+        }
+
+        return ($document->nextQuestion['target'] ?? null) === 'address'
+            || str_starts_with($id, 'address_');
+    }
+
+    private function isAddressRejection(string $text): bool
+    {
+        $normalized = mb_strtolower(trim($text));
+        if ($normalized === '') {
+            return false;
+        }
+        if (preg_match('/^(nee|neen|no)\b/u', $normalized) === 1) {
+            return true;
+        }
+
+        return preg_match(
+            '/verkeerd(e)?\s+(postcode|adres|huisnummer)|niet (mijn|het) adres|dat (is|klopt) niet|klopt niet|opnieuw beginnen|andere postcode|ander adres|niet de juiste/u',
+            $normalized,
+        ) === 1;
+    }
+
+    private function restartUnverifiedAddress(Intake $intake, \App\Domain\IntakeDocument $document): void
+    {
+        $document->clearUnverifiedAddress();
+        $this->addressLookupLogger->log('reset', [
+            'intake_id' => $intake->getId(),
+            'provider' => $this->addressProvider::class,
+            'reason' => 'resident_correction',
+        ]);
+    }
+
+    private function mergePostcode(?string $incoming, mixed $existing): ?string
+    {
+        if (is_string($incoming) && trim($incoming) !== '') {
+            try {
+                return $this->addressNormalizer->normalizePostcode($incoming);
+            } catch (\InvalidArgumentException) {
+                return is_string($existing) && $existing !== '' ? $existing : null;
+            }
+        }
+
+        return is_string($existing) && $existing !== '' ? $existing : null;
+    }
+
+    private function isSpokenYes(string $text, bool $bareYes): bool
+    {
+        if ($this->isAddressRejection($text)) {
+            return false;
+        }
+        if ($bareYes) {
+            return true;
+        }
+        $normalized = $this->normalizeSpokenConfirmation($text);
+        if ($normalized === '') {
+            return false;
+        }
+
+        return preg_match('/^(ja|yes|ok|okay|oke|klopt)\b/u', $normalized) === 1
+            || preg_match('/\b(dat klopt|that(?:\'s| is) (correct|my address)|dat is mijn adres|gecontroleerd|rond\s*af|afronden|leg(?:\s+het)?\s+vast|vastleggen)\b/u', $normalized) === 1;
+    }
+
+    private function normalizeSpokenConfirmation(string $text): string
+    {
+        $folded = mb_strtolower(trim($text));
+        $folded = str_replace(["\u{FEFF}", "\u{200B}", "\u{00A0}", "\u{202F}"], ' ', $folded);
+        $folded = str_replace(['ë', 'é', 'è', 'ï'], ['e', 'e', 'e', 'i'], $folded);
+        $folded = preg_replace('/^[^\p{L}\p{N}]+/u', '', $folded) ?? $folded;
+        $folded = trim(preg_replace('/\s+/u', ' ', $folded) ?? $folded);
+
+        return $folded;
+    }
+
+    private function maybeConfirmPendingAddress(
         \App\Domain\IntakeDocument $document,
         string $text,
         string $messageId,
-        bool $bareYes,
+        bool $spokenYes,
     ): void {
-        $nextId = $document->nextQuestion['id'] ?? null;
-        $normalized = mb_strtolower(trim($text));
-        $explicitYes = (bool) preg_match('/^(ja|yes)([,.!]|\s+dat (klopt|is het)|, that is (correct|it))?\.?$/u', $normalized)
-            || (bool) preg_match('/dat klopt|that(?:\'s| is) (correct|my address)|dat is mijn adres/u', $normalized);
-
-        if ($document->pendingAddressQuestionId !== null && $nextId === $document->pendingAddressQuestionId && ($explicitYes || $bareYes)) {
-            $candidate = $document->address['candidates'][0] ?? null;
-            if (is_array($candidate) && count($document->address['candidates'] ?? []) === 1) {
-                $document->verifyAddress(
-                    (string) $document->address['lookup_id'],
-                    (string) $candidate['candidate_id'],
-                    (int) $document->address['address_revision'],
-                    'voice',
-                    $messageId,
-                );
-                $document->pendingAddressQuestionId = null;
-            }
-
+        if (!$spokenYes || $document->isAddressVerified()) {
             return;
         }
-
-        if ($intake->getStatus() === IntakeStatus::ReadyForConfirmation && $document->summary !== null && ($explicitYes) && $nextId === ($document->summary['id'] ?? null)) {
-            $document->pendingSummaryQuestionId = $document->summary['id'];
+        $candidates = $this->candidateList($document->address['candidates'] ?? []);
+        if (count($candidates) !== 1) {
+            return;
         }
+        $lookupId = $document->address['lookup_id'] ?? null;
+        if (!is_string($lookupId) || $lookupId === '') {
+            return;
+        }
+        $nextId = (string) ($document->nextQuestion['id'] ?? '');
+        if (in_array($nextId, ['address_ask_house_number', 'address_ask_postcode', 'address_lookup_unavailable', 'address_no_match', 'address_select'], true)) {
+            return;
+        }
+        if (!$this->isAddressFollowUp($document) && $document->pendingAddressQuestionId === null) {
+            return;
+        }
+        $candidate = $candidates[0];
+        $document->verifyAddress(
+            $lookupId,
+            (string) $candidate['candidate_id'],
+            (int) $document->address['address_revision'],
+            'voice',
+            $messageId,
+        );
+        $document->pendingAddressQuestionId = null;
+    }
+
+    private function isOnSpokenSummaryQuestion(\App\Domain\IntakeDocument $document): bool
+    {
+        $nextId = $document->nextQuestion['id'] ?? null;
+        $summaryId = $document->summary['id'] ?? null;
+
+        return $nextId === 'terminal_summary'
+            || ($document->nextQuestion['target'] ?? null) === 'summary'
+            || (is_string($summaryId) && $summaryId !== '' && $nextId === $summaryId);
+    }
+
+    private function shouldConfirmSpokenSummary(Intake $intake, \App\Domain\IntakeDocument $document, bool $spokenYes): bool
+    {
+        if (!$spokenYes || $document->summary === null) {
+            return false;
+        }
+        $summaryId = $document->summary['id'] ?? null;
+        if (!is_string($summaryId) || $summaryId === '') {
+            return false;
+        }
+
+        return $this->isOnSpokenSummaryQuestion($document)
+            && ($intake->getStatus() === IntakeStatus::ReadyForConfirmation || $intake->getStatus() === IntakeStatus::Collecting);
+    }
+
+    private function shouldOfferSpokenSummary(Intake $intake, \App\Domain\IntakeDocument $document): bool
+    {
+        if ($document->summary !== null || !$document->isAddressVerified() || $document->hasBlockingNeedsReview()) {
+            return false;
+        }
+        if ($document->riskState()->blocksNormalCompletion()) {
+            return false;
+        }
+        if (($document->nextQuestion['id'] ?? null) === 'terminal_summary') {
+            return true;
+        }
+        $tree = $this->treeRepository->getPublished($intake->getTreeVersion());
+        $next = $this->treeEngine->next($tree, $document, $intake->getConversationLanguage());
+
+        return ($next['outcome'] ?? null) === 'summary_possible';
+    }
+
+    private function confirmSpokenReport(
+        Intake $intake,
+        \App\Domain\IntakeDocument $document,
+        AnalysisTask $task,
+        string $messageId,
+    ): void {
+        $summaryId = (string) ($document->summary['id'] ?? '');
+        $intake->replaceDocument($document);
+        $task->succeed($intake->getRevision());
+        $this->entityManager->flush();
+        $this->confirm($intake, $intake->getRevision(), $summaryId, 'voice', $messageId);
+        $document = $intake->document();
+        $this->presentClosingQuestion($intake, $document);
+        $intake->replaceDocument($document);
+        $this->maybeAddAssistantQuestion($intake, $document);
+        $this->events->publish($intake, 'intake.updated');
+        $this->events->publish($intake, 'task.updated', ['task_id' => $task->getId(), 'status' => $task->getStatus()]);
+        $this->entityManager->flush();
+    }
+
+    /**
+     * @return array{resident_text: string, work_description_nl: string}
+     */
+    private function writeSummaryDocument(Intake $intake, \App\Domain\IntakeDocument $document): array
+    {
+        $texts = $this->summaryComposer->compose($intake);
+        $document->setSummary([
+            'id' => IdGenerator::prefixed('summary'),
+            'source_revision' => $intake->getRevision(),
+            'language' => $intake->getConversationLanguage(),
+            'resident_text' => $texts['resident_text'],
+            'work_description_nl' => $texts['work_description_nl'],
+        ]);
+        $matches = $this->classificationSearch->suggest($intake);
+        if ($matches !== []) {
+            $document->classification = [
+                'tree_version' => $intake->getTreeVersion(),
+                'candidates' => $matches,
+            ];
+        }
+        $intake->setStatus(IntakeStatus::ReadyForConfirmation);
+
+        return $texts;
+    }
+
+    private function presentSummaryQuestion(Intake $intake, \App\Domain\IntakeDocument $document): void
+    {
+        $summary = $document->summary;
+        if ($summary === null) {
+            return;
+        }
+        $id = (string) $summary['id'];
+        $resident = (string) ($summary['resident_text'] ?? '');
+        $nl = str_starts_with($intake->getConversationLanguage(), 'nl');
+        $document->pendingSummaryQuestionId = $id;
+        $document->nextQuestion = [
+            'id' => $id,
+            'target' => 'summary',
+            'text' => $nl ? $resident.' Klopt dit?' : $resident.' Is that correct?',
+        ];
+    }
+
+    private function presentClosingQuestion(Intake $intake, \App\Domain\IntakeDocument $document): void
+    {
+        $nl = str_starts_with($intake->getConversationLanguage(), 'nl');
+        $document->nextQuestion = [
+            'id' => 'intake_confirmed',
+            'target' => null,
+            'text' => $nl ? 'De melding is vastgelegd.' : 'The report has been recorded.',
+        ];
     }
 
     private function maybeAddAssistantQuestion(Intake $intake, \App\Domain\IntakeDocument $document): void
