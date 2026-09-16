@@ -171,7 +171,7 @@ final class WcsAddressProviderTest extends TestCase
     public function testLogsLookupOutcomeWithoutAddressPii(): void
     {
         $records = [];
-        $psr = $this->createMock(LoggerInterface::class);
+        $psr = $this->createStub(LoggerInterface::class);
         $psr->method('info')->willReturnCallback(static function (string $message, array $context) use (&$records): void {
             $records[] = ['message' => $message, 'context' => $context];
         });

@@ -545,10 +545,29 @@ final class DutchPostcodeParser
                 return (int) $tokens[$i + 1];
             }
         }
+        for ($i = 0; $i < $count; ++$i) {
+            if (!self::isStreetToken($tokens[$i])
+                || !isset($tokens[$i + 1])
+                || preg_match('/^[1-9][0-9]{0,4}$/', $tokens[$i + 1]) !== 1
+            ) {
+                continue;
+            }
+
+            return (int) $tokens[$i + 1];
+        }
         if ($count === 1 && preg_match('/^[1-9][0-9]{0,4}$/', $tokens[0]) === 1 && strlen($tokens[0]) < 4) {
             return (int) $tokens[0];
         }
 
         return null;
+    }
+
+    private static function isStreetToken(string $token): bool
+    {
+        if (in_array(mb_strtolower($token), self::STOP, true)) {
+            return false;
+        }
+
+        return (bool) preg_match('/(straat|laan|weg|plein|gracht|kade|singel|hof|dreef|pad|steeg|dijk|baan)$/u', self::fold($token));
     }
 }
