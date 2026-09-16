@@ -8,6 +8,12 @@ framework:
     #esi: true
     #fragments: true
 
+when@prod:
+    framework:
+        # App Platform (and nginx) sit in front of PHP-FPM.
+        trusted_proxies: '127.0.0.1,REMOTE_ADDR,PRIVATE_SUBNETS'
+        trusted_headers: ['x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-port', 'x-forwarded-prefix']
+
 when@test:
     framework:
         test: true

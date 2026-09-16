@@ -26,8 +26,13 @@ final class IntakeApiTest extends WebTestCase
 
     public function testHealthIsPublic(): void
     {
-        $this->client->request('GET', '/api/v1/health');
-        self::assertResponseIsSuccessful();
+        foreach (['/health', '/api/v1/health', '/'] as $path) {
+            $this->client->request('GET', $path);
+            self::assertResponseIsSuccessful();
+            $body = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, JSON_THROW_ON_ERROR);
+            self::assertSame('ok', $body['status']);
+            self::assertSame('woningtriage', $body['service']);
+        }
     }
 
     public function testKitchenTapFlowWithUnknownCauseAddressAndSingleReport(): void
@@ -225,6 +230,8 @@ final class IntakeApiTest extends WebTestCase
         ], 'voice-1', 201);
         self::assertSame('webrtc', $session['transport']);
         self::assertNotSame('', $session['sdp_answer']);
+        $queue = static::getContainer()->get(\App\Live\LiveGatewayCommandQueue::class);
+        self::assertContains($session['id'], $queue->pending());
 
         $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
             'expected_revision' => 0,
@@ -244,6 +251,8 @@ final class IntakeApiTest extends WebTestCase
 
         $stopped = $this->postJson('/api/v1/intakes/'.$intake['id'].'/voice-sessions/'.$session['id'].'/stop', $this->tokenA, [], 'voice-stop', 202);
         self::assertSame('closed', $stopped['status']);
+        $queue = static::getContainer()->get(\App\Live\LiveGatewayCommandQueue::class);
+        self::assertNotContains($session['id'], $queue->pending());
     }
 
     public function testCancelAndLockedIntake(): void

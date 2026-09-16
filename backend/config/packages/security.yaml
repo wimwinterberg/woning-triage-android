@@ -21,6 +21,8 @@ security:
             entry_point: App\Security\JsonAuthenticationEntryPoint
 
     access_control:
+        - { path: ^/$, roles: PUBLIC_ACCESS }
+        - { path: ^/health, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/health, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/auth/activation, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1, roles: IS_AUTHENTICATED_FULLY }

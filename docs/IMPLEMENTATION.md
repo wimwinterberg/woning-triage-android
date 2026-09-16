@@ -38,6 +38,14 @@ Providerinterface met:
 Conversatieboom: `backend/config/trees/demo-ledo-1.json` (LEDO + adres + samenvatting).  
 Classificatiecatalogus: importer `woningtriage:import-classification`. Productiebestand `beslisboom-prod.json` (53.115.659 bytes, SHA-256 `4ba8f60d9b2072d05ffa03e7796b0be7fefd2b4a7f9a23d3a0565f99af6d901c`) ontbreekt in deze repository. Er is een kleine fixture `backend/fixtures/classification/demo-catalog.json`. `planning_duration` wordt hoogstens als bronmetadata bewaard en nooit in API, prompt of report gezet.
 
+## DigitalOcean App Platform
+
+- PHP-buildpack (heroku-buildpack-php): `backend/Procfile` start `heroku-php-nginx -C nginx_app.conf public/`.
+- Monorepo: `.do/app.yaml` zet `source_dir: backend`, regio `ams`, PostgreSQL 16, PRE_DEPLOY `woningtriage:release`.
+- `ext-pdo_pgsql`, `ext-intl`, `ext-mbstring` en `ext-xml` staan in `composer.json` zodat de buildpack ze inschakelt.
+- Trusted proxies in prod: `REMOTE_ADDR` + `PRIVATE_SUBNETS` (load balancer).
+- Live-gateway-queue leest open `VoiceSession`-rijen uit PostgreSQL; web en worker delen geen schijf.
+
 ## Overig
 
 - Revisies + `Idempotency-Key`; één report per intake (`uniq_report_intake`).

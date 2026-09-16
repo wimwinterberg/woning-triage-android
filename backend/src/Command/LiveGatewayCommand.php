@@ -64,6 +64,7 @@ final class LiveGatewayCommand extends Command
                     $output->writeln('Gateway error: '.$exception->getMessage());
                 }
                 $this->queue->ack($voiceSessionId);
+                $this->entityManager->clear();
             }
             sleep(2);
         }

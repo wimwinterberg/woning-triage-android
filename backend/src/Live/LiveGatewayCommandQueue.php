@@ -4,25 +4,25 @@ declare(strict_types=1);
 
 namespace App\Live;
 
+use App\Entity\VoiceSession;
+use Doctrine\ORM\EntityManagerInterface;
+
 /**
- * Records voice-session IDs that a long-running worker should attach to.
- * Production uses the console worker `woningtriage:live-gateway`.
+ * Voice-session IDs that a long-running worker should attach to.
+ *
+ * Uses PostgreSQL instead of a local directory so the App Platform web
+ * service and live-gateway worker (separate filesystems) stay in sync.
  */
 final class LiveGatewayCommandQueue
 {
-    public function __construct(private readonly string $directory)
+    public function __construct(private readonly EntityManagerInterface $entityManager)
     {
     }
 
     public function enqueue(string $voiceSessionId): void
     {
-        if (!is_dir($this->directory)) {
-            mkdir($this->directory, 0775, true);
-        }
-        file_put_contents($this->directory.'/'.$voiceSessionId.'.json', json_encode([
-            'voice_session_id' => $voiceSessionId,
-            'queued_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format(DATE_ATOM),
-        ], JSON_THROW_ON_ERROR));
+        // The VoiceSession row is already flushed; pending() reads PostgreSQL.
+        unset($voiceSessionId);
     }
 
     /**
@@ -30,19 +30,21 @@ final class LiveGatewayCommandQueue
      */
     public function pending(): array
     {
-        $ids = [];
-        foreach (glob($this->directory.'/*.json') ?: [] as $file) {
-            $ids[] = basename($file, '.json');
-        }
+        /** @var list<string> $ids */
+        $ids = $this->entityManager->createQuery(
+            'SELECT v.id FROM App\\Entity\\VoiceSession v
+             WHERE v.status IN (:statuses) AND v.providerSessionId IS NOT NULL
+             ORDER BY v.createdAt ASC'
+        )
+            ->setParameter('statuses', [VoiceSession::CONNECTING, VoiceSession::ACTIVE])
+            ->getSingleColumnResult();
 
         return $ids;
     }
 
     public function ack(string $voiceSessionId): void
     {
-        $path = $this->directory.'/'.$voiceSessionId.'.json';
-        if (is_file($path)) {
-            unlink($path);
-        }
+        // Closed/failed sessions drop out of pending(); nothing to delete.
+        unset($voiceSessionId);
     }
 }

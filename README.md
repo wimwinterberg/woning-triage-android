@@ -15,6 +15,7 @@ Een zelfstandige Android-app die bewoners via een gesproken of getypt gesprek he
 | [API-contract](docs/API_CONTRACT.md) | App ↔ backend |
 | [OpenAPI](docs/openapi.yaml) | Machineleesbaar contract |
 | [Technische keuzes](docs/IMPLEMENTATION.md) | Vastgelegde v1-keuzes |
+| [DigitalOcean](docs/DIGITALOCEAN.md) | App Platform-deploy van de Symfony-API |
 | [Acceptatie](docs/ACCEPTANCE.md) | Scenario's |
 
 ## Vereisten
@@ -81,6 +82,10 @@ Standaard backend-URL is `http://10.0.2.2:8000/` (emulator). Override:
 ```
 
 Eerste start: voer de activatiecode in. Kies **Probleem melden** (spraak, microfoontoestemming) of **Liever typen**.
+
+## DigitalOcean App Platform
+
+De API is deploybaar op App Platform (PHP-buildpack, document root `public/`, managed PostgreSQL 16). Spec: `.do/app.yaml`. Stappen, secrets en de Android-`BACKEND_URL` staan in [docs/DIGITALOCEAN.md](docs/DIGITALOCEAN.md).
 
 ## Wat v1 wel en niet bewijst
 

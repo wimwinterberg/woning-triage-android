@@ -25,9 +25,9 @@ services:
         arguments:
             $treeDirectory: '%app.tree_dir%'
 
-    App\Live\LiveGatewayCommandQueue:
+    App\Command\ReleaseCommand:
         arguments:
-            $directory: '%kernel.project_dir%/var/live-gateway'
+            $treeDirectory: '%app.tree_dir%'
 
     App\Service\IntakeService:
         arguments:
