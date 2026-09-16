@@ -62,6 +62,7 @@ final class IntakeApiTest extends WebTestCase
         $intake = $this->getIntake($intake['id'], $this->tokenA);
         self::assertSame('unknown', $intake['fields']['cause']['state']);
         self::assertNull($intake['fields']['cause']['value']);
+        self::assertSame('ask_address', $intake['next_question']['id']);
 
         $lookup = $this->postJson('/api/v1/intakes/'.$intake['id'].'/address-lookups', $this->tokenA, [
             'expected_revision' => $intake['revision'],
@@ -270,6 +271,71 @@ final class IntakeApiTest extends WebTestCase
             $this->auth($this->tokenA) + ['HTTP_IDEMPOTENCY_KEY' => 'locked-msg'],
         );
         self::assertResponseStatusCodeSame(409);
+    }
+
+    public function testSpokenCauseAndSpelledPostcodeAdvanceTheTree(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => 0,
+            'client_message_id' => 'ledo-1',
+            'text' => 'De keukenkraan druppelt sinds gisteren.',
+        ], 'sp-1', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('ask_cause', $intake['next_question']['id']);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'cause-1',
+            'text' => 'De pakking is versleten',
+        ], 'sp-2', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('reported', $intake['fields']['cause']['state']);
+        self::assertSame('De pakking is versleten', $intake['fields']['cause']['value']);
+        self::assertSame('ask_address', $intake['next_question']['id']);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'pc-1',
+            'text' => '1234 anton bernard',
+        ], 'sp-3', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('1234 AB', $intake['address']['postcode']);
+        self::assertNull($intake['address']['house_number']);
+        self::assertSame('address_ask_house_number', $intake['next_question']['id']);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'hn-1',
+            'text' => 'huisnummer 12',
+        ], 'sp-4', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame(12, $intake['address']['house_number']);
+        self::assertNotEmpty($intake['address']['candidates']);
+        self::assertSame('address_select', $intake['next_question']['id']);
+    }
+
+    public function testAskedLocationStoresFreeTextWhenNoKeywordMatches(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => 0,
+            'client_message_id' => 'vague-1',
+            'text' => 'er is iets kapot',
+        ], 'loc-1', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('ask_location', $intake['next_question']['id']);
+        self::assertSame('reported', $intake['fields']['defect']['state']);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'loc-2',
+            'text' => 'boven bij de trap',
+        ], 'loc-2', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('reported', $intake['fields']['location']['state']);
+        self::assertSame('boven bij de trap', $intake['fields']['location']['value']);
+        self::assertSame('ask_element', $intake['next_question']['id']);
     }
 
     /**

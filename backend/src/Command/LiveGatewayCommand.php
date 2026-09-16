@@ -83,7 +83,7 @@ final class LiveGatewayCommand extends Command
                 $this->queue->ack($voiceSessionId);
                 $this->entityManager->clear();
             }
-            usleep(400_000);
+            usleep(100_000);
         }
     }
 
@@ -101,7 +101,7 @@ final class LiveGatewayCommand extends Command
         $this->log($output, 'Attached sideband for '.$session->getId());
         $transcript = '';
         $audioChunks = 0;
-        $alreadySpeaking = $this->drainUntilOutputOrTimeout($client, $output, $transcript, $audioChunks, 1.5);
+        $alreadySpeaking = $this->drainUntilOutputOrTimeout($client, $output, $transcript, $audioChunks, 0.4);
         if ($alreadySpeaking) {
             $this->log($output, 'Greeting already in progress on '.$session->getId().'; skipping duplicate');
         } else {
@@ -125,8 +125,10 @@ final class LiveGatewayCommand extends Command
                 continue;
             }
             $type = (string) ($payload['type'] ?? '');
-            if ($type === 'session.output_audio.delta') {
-                ++$audioChunks;
+            if ($this->isNoisySidebandType($type)) {
+                if ($type === 'session.output_audio.delta') {
+                    ++$audioChunks;
+                }
                 continue;
             }
             if ($type === 'session.input_transcript.delta') {
@@ -170,6 +172,7 @@ final class LiveGatewayCommand extends Command
         $delegationId = (string) ($payload['delegation']['id'] ?? '');
         $intake = $session->getIntake();
         $this->entityManager->refresh($intake);
+        $previousQuestion = (string) ($intake->document()->nextQuestion['text'] ?? '');
         $this->log($output, 'delegation '.$delegationId.' transcript_chars='.mb_strlen($transcript).' text='.$this->clip($transcript));
         $this->sendEvent($client, [
             'type' => 'session.thinking.append',
@@ -178,36 +181,47 @@ final class LiveGatewayCommand extends Command
             'content' => 'De backend zoekt of werkt het dossier bij. Wacht op het resultaat voordat je verder vraagt.',
         ]);
         $started = microtime(true);
-        if (trim($transcript) !== '') {
-            try {
-                $task = new \App\Entity\AnalysisTask(
-                    \App\Domain\IdGenerator::prefixed('task'),
-                    $intake,
-                    'analyze',
-                    $intake->getRevision(),
-                );
-                $this->entityManager->persist($task);
-                $this->entityManager->flush();
-                $this->intakeService->runAnalysis(
-                    $intake,
-                    $task,
-                    $transcript,
-                    \App\Domain\IdGenerator::prefixed('message'),
-                );
-                $this->entityManager->refresh($intake);
-            } catch (\Throwable $exception) {
-                $this->log($output, 'analysis failed: '.$exception->getMessage());
-            }
-        } else {
-            $this->log($output, 'delegation without transcript; sending current question so GPT-Live does not wait');
+        if (trim($transcript) === '') {
+            $this->log($output, 'delegation without transcript; waiting instead of repeating the question');
+            $this->sendEvent($client, [
+                'type' => 'session.commentary.append',
+                'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
+                'delegation_id' => $delegationId !== '' ? $delegationId : null,
+                'content' => 'Er is nog geen nieuw antwoord van de bewoner. Stel geen nieuwe vraag; wacht tot de bewoner spreekt.',
+            ]);
+
+            return;
+        }
+        try {
+            $task = new \App\Entity\AnalysisTask(
+                \App\Domain\IdGenerator::prefixed('task'),
+                $intake,
+                'analyze',
+                $intake->getRevision(),
+            );
+            $this->entityManager->persist($task);
+            $this->entityManager->flush();
+            $this->intakeService->runAnalysis(
+                $intake,
+                $task,
+                $transcript,
+                \App\Domain\IdGenerator::prefixed('message'),
+            );
+            $this->entityManager->refresh($intake);
+        } catch (\Throwable $exception) {
+            $this->log($output, 'analysis failed: '.$exception->getMessage());
         }
         $next = $intake->document()->nextQuestion['text'] ?? 'Gegevens zijn bijgewerkt.';
         $ms = (int) round((microtime(true) - $started) * 1000);
+        $sameQuestion = $previousQuestion !== '' && $previousQuestion === $next;
+        $content = $sameQuestion
+            ? 'Het vorige antwoord is nog niet vastgelegd. Herhaal de vraag niet woordelijk. Vraag het in één andere korte zin: '.$next
+            : 'Zeg nu hardop tegen de bewoner, in het Nederlands: '.$next;
         $this->sendEvent($client, [
             'type' => 'session.commentary.append',
             'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
             'delegation_id' => $delegationId !== '' ? $delegationId : null,
-            'content' => 'Zeg nu hardop tegen de bewoner, in het Nederlands: '.$next,
+            'content' => $content,
         ]);
         $this->log($output, 'commentary sent in '.$ms.'ms question='.$this->clip($next));
     }
@@ -236,12 +250,15 @@ final class LiveGatewayCommand extends Command
                 continue;
             }
             $type = (string) ($payload['type'] ?? '');
-            $this->log($output, 'pre-greet event '.$type);
-            if ($type === 'session.output_audio.delta') {
-                ++$audioChunks;
+            if ($this->isNoisySidebandType($type)) {
+                if ($type === 'session.output_audio.delta') {
+                    ++$audioChunks;
 
-                return true;
+                    return true;
+                }
+                continue;
             }
+            $this->log($output, 'pre-greet event '.$type);
             if ($type === 'session.output_transcript.delta') {
                 return true;
             }
@@ -274,7 +291,7 @@ final class LiveGatewayCommand extends Command
             'delegation_id' => null,
             'content' => LiveGreeting::instructions($spoken),
         ]);
-        $acked = $this->awaitClientAck($client, $output, $instructionId, 'session.instructions.appended', 8);
+        $acked = $this->awaitClientAck($client, $output, $instructionId, 'session.instructions.appended', 2);
         $this->sendEvent($client, [
             'type' => 'session.commentary.append',
             'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
@@ -315,7 +332,7 @@ final class LiveGatewayCommand extends Command
 
                 return false;
             }
-            if ($type !== 'session.output_audio.delta') {
+            if ($type !== 'session.output_audio.delta' && !$this->isNoisySidebandType($type)) {
                 $this->log($output, 'event '.$type.' while waiting for '.$expectedType);
             }
         }
@@ -346,8 +363,19 @@ final class LiveGatewayCommand extends Command
 
     private function clip(string $text): string
     {
+        $text = preg_replace('/\b[1-9][0-9]{3}\s?[A-Za-z]{2}\b/', '**** **', $text) ?? $text;
         $text = preg_replace('/\s+/', ' ', trim($text)) ?? $text;
 
         return mb_strlen($text) > 160 ? mb_substr($text, 0, 157).'...' : $text;
+    }
+
+    private function isNoisySidebandType(string $type): bool
+    {
+        return in_array($type, [
+            'session.input_audio.append',
+            'session.output_audio.append',
+            'session.input_audio.delta',
+            'session.output_audio.delta',
+        ], true);
     }
 }

@@ -29,6 +29,8 @@ use App\Exception\ValidationFailedException;
 use App\Tree\DecisionTreeEngine;
 use App\Tree\TreeRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 final class IntakeService
 {
@@ -47,6 +49,7 @@ final class IntakeService
         private readonly SummaryComposer $summaryComposer,
         private readonly ClassificationSearchService $classificationSearch,
         private readonly string $promptVersion,
+        private readonly LoggerInterface $logger = new NullLogger(),
     ) {
     }
 
@@ -579,8 +582,50 @@ final class IntakeService
         if (!is_array($address) || ($address['verification_status'] ?? '') === 'verified') {
             return;
         }
-        $candidates = $address['candidates'] ?? [];
         $nl = str_starts_with($language, 'nl');
+        $postcode = is_string($address['postcode'] ?? null) ? trim((string) $address['postcode']) : '';
+        $houseNumber = $address['house_number'] ?? null;
+        $hasNumber = is_int($houseNumber) ? $houseNumber > 0 : (is_numeric($houseNumber) && (int) $houseNumber > 0);
+        $candidates = $address['candidates'] ?? [];
+        $lookupId = $address['lookup_id'] ?? null;
+        $lookedUp = is_string($lookupId) && $lookupId !== '';
+
+        if ($postcode !== '' && !$hasNumber) {
+            $document->nextQuestion = [
+                'id' => 'address_ask_house_number',
+                'target' => 'address',
+                'text' => $nl
+                    ? 'Wat is het huisnummer van de woning?'
+                    : 'What is the house number of the home?',
+            ];
+
+            return;
+        }
+        if ($postcode === '' && $hasNumber) {
+            $document->nextQuestion = [
+                'id' => 'address_ask_postcode',
+                'target' => 'address',
+                'text' => $nl
+                    ? 'Wat is de postcode? Vier cijfers en twee letters; letters mag u spellen, zoals Simon Johan voor SJ.'
+                    : 'What is the postcode? Four digits and two letters; you may spell the letters, for example Simon Johan for SJ.',
+            ];
+
+            return;
+        }
+        if ($postcode === '' || !$hasNumber) {
+            return;
+        }
+        if (!$lookedUp) {
+            $document->nextQuestion = [
+                'id' => 'address_lookup_unavailable',
+                'target' => 'address',
+                'text' => $nl
+                    ? 'Het adres kon even niet worden opgezocht. Zeg de postcode en het huisnummer nog eens.'
+                    : 'The address could not be looked up just now. Please say the postcode and house number again.',
+            ];
+
+            return;
+        }
         if ($candidates === []) {
             $document->nextQuestion = [
                 'id' => 'address_no_match',
@@ -617,25 +662,91 @@ final class IntakeService
     }
 
     /**
-     * @param array{postcode: string, house_number: int, addition: ?string} $hint
+     * @param array{postcode: ?string, house_number: ?int, addition: ?string} $hint
      */
     private function applyAddressHint(Intake $intake, \App\Domain\IntakeDocument $document, array $hint): void
     {
-        try {
-            $postcode = $this->addressNormalizer->normalizePostcode($hint['postcode']);
-            $number = $this->addressNormalizer->normalizeHouseNumber($hint['house_number']);
-            $addition = $this->addressNormalizer->normalizeAddition($hint['addition'] ?? null);
-        } catch (\InvalidArgumentException) {
+        $existing = is_array($document->address) ? $document->address : [];
+        if (($existing['verification_status'] ?? '') === 'verified') {
             return;
         }
+
+        $postcode = $this->mergePostcode($hint['postcode'] ?? null, $existing['postcode'] ?? null);
+        $incomingNumber = $hint['house_number'] ?? null;
+        $number = null;
+        if (is_int($incomingNumber) && $incomingNumber > 0) {
+            try {
+                $number = $this->addressNormalizer->normalizeHouseNumber($incomingNumber);
+            } catch (\InvalidArgumentException) {
+                $number = null;
+            }
+        } elseif ($postcode !== null && $postcode === ($existing['postcode'] ?? null)) {
+            $existingNumber = $existing['house_number'] ?? null;
+            $number = is_int($existingNumber) ? $existingNumber : (is_numeric($existingNumber) ? (int) $existingNumber : null);
+            if ($number !== null && $number < 1) {
+                $number = null;
+            }
+        }
+
+        $incomingAddition = $hint['addition'] ?? null;
+        $addition = null;
+        try {
+            if (is_string($incomingAddition) && trim($incomingAddition) !== '') {
+                $addition = $this->addressNormalizer->normalizeAddition($incomingAddition);
+            } elseif ($postcode === ($existing['postcode'] ?? null) && $number === ($existing['house_number'] ?? null)) {
+                $addition = $this->addressNormalizer->normalizeAddition(
+                    is_string($existing['addition'] ?? null) ? (string) $existing['addition'] : null,
+                );
+            }
+        } catch (\InvalidArgumentException) {
+            $addition = null;
+        }
+
+        if ($postcode === null && $number === null) {
+            return;
+        }
+
+        if ($postcode === null || $number === null) {
+            $document->recordAddressInput([
+                'postcode' => $postcode,
+                'house_number' => $number,
+                'addition' => $addition,
+                'lookup_id' => null,
+                'candidates' => [],
+                'lookup_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format(DATE_ATOM),
+                'provider' => 'configured',
+            ]);
+
+            return;
+        }
+
         try {
             $candidates = array_map(
                 static fn ($candidate): array => $candidate->toArray(),
                 $this->addressProvider->lookup($postcode, $number, $addition),
             );
         } catch (\App\Exception\AddressLookupUnavailableException) {
+            $this->logger->info('Address lookup unavailable', [
+                'intake_id' => $intake->getId(),
+                'candidate_count' => null,
+            ]);
+            $document->recordAddressInput([
+                'postcode' => $postcode,
+                'house_number' => $number,
+                'addition' => $addition,
+                'lookup_id' => null,
+                'candidates' => [],
+                'lookup_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format(DATE_ATOM),
+                'provider' => 'configured',
+            ]);
+
             return;
         }
+
+        $this->logger->info('Address lookup finished', [
+            'intake_id' => $intake->getId(),
+            'candidate_count' => count($candidates),
+        ]);
         $document->recordAddressInput([
             'postcode' => $postcode,
             'house_number' => $number,
@@ -645,6 +756,19 @@ final class IntakeService
             'lookup_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format(DATE_ATOM),
             'provider' => 'configured',
         ]);
+    }
+
+    private function mergePostcode(?string $incoming, mixed $existing): ?string
+    {
+        if (is_string($incoming) && trim($incoming) !== '') {
+            try {
+                return $this->addressNormalizer->normalizePostcode($incoming);
+            } catch (\InvalidArgumentException) {
+                return is_string($existing) && $existing !== '' ? $existing : null;
+            }
+        }
+
+        return is_string($existing) && $existing !== '' ? $existing : null;
     }
 
     private function maybeConfirmPending(

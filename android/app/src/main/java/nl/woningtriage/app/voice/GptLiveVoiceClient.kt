@@ -81,7 +81,7 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
         })
         val offer = awaitSdp { sdpObserver -> peerConnection?.createOffer(sdpObserver, MediaConstraints()) }
         awaitSet { sdpObserver -> peerConnection?.setLocalDescription(sdpObserver, offer) }
-        withTimeoutOrNull(8_000) { observer?.iceComplete?.await() }
+        withTimeoutOrNull(1_000) { observer?.iceComplete?.await() }
         isSendingAudio = true
         routePlaybackToSpeaker()
         return peerConnection?.localDescription?.description ?: offer.description

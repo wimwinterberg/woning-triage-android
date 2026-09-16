@@ -55,4 +55,21 @@ final class IntakeDocumentTest extends TestCase
         self::assertSame(FieldState::Missing, $document->field(FieldName::Cause)->state);
         self::assertNotSame([], $document->hypotheses);
     }
+
+    public function testPartialPostcodeDoesNotCountAsVerified(): void
+    {
+        $document = IntakeDocument::initial(null);
+        $document->recordAddressInput([
+            'postcode' => '3573 SJ',
+            'house_number' => null,
+            'addition' => null,
+            'lookup_id' => null,
+            'candidates' => [],
+            'lookup_at' => '2026-09-16T00:00:00+00:00',
+            'provider' => 'configured',
+        ]);
+        self::assertSame('3573 SJ', $document->address['postcode']);
+        self::assertNull($document->address['house_number']);
+        self::assertFalse($document->isAddressVerified());
+    }
 }

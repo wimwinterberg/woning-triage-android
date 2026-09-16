@@ -25,18 +25,84 @@ final class HeuristicIntakeAnalyzerTest extends TestCase
         self::assertStringContainsString('Druppelt', (string) $fields['defect']['value']);
         self::assertArrayNotHasKey('cause', $fields);
         self::assertSame('sinds gisteren', $proposal->independentTime);
+        self::assertNull($proposal->addressHint);
     }
 
-    public function testUnknownCause(): void
+    public function testUnknownCauseWhenAskingCause(): void
     {
-        $proposal = (new HeuristicIntakeAnalyzer())->analyze($this->intake(), 'Ik weet het niet', 'msg2', 0);
+        $proposal = (new HeuristicIntakeAnalyzer())->analyze(
+            $this->intake('cause'),
+            'Ik weet het niet',
+            'msg2',
+            0,
+        );
+        self::assertTrue($proposal->causeUnknown);
+        self::assertSame('unknown', $proposal->fieldUpdates[0]['state']);
+        self::assertSame('cause', $proposal->fieldUpdates[0]['field']);
+    }
+
+    public function testOnbekendIsUnknownCause(): void
+    {
+        $proposal = (new HeuristicIntakeAnalyzer())->analyze($this->intake('cause'), 'onbekend', 'msg3', 0);
         self::assertTrue($proposal->causeUnknown);
         self::assertSame('unknown', $proposal->fieldUpdates[0]['state']);
     }
 
-    private function intake(): Intake
+    public function testReportedCauseWhenAskingCause(): void
+    {
+        $proposal = (new HeuristicIntakeAnalyzer())->analyze(
+            $this->intake('cause'),
+            'De pakking is versleten',
+            'msg4',
+            0,
+        );
+        self::assertFalse($proposal->causeUnknown);
+        self::assertSame('cause', $proposal->fieldUpdates[0]['field']);
+        self::assertSame('reported', $proposal->fieldUpdates[0]['state']);
+        self::assertSame('De pakking is versleten', $proposal->fieldUpdates[0]['value']);
+    }
+
+    public function testAskedLocationCapturesNonDictionaryRoom(): void
+    {
+        $proposal = (new HeuristicIntakeAnalyzer())->analyze($this->intake('location'), 'boven bij de trap', 'msg5', 0);
+        self::assertSame('location', $proposal->fieldUpdates[0]['field']);
+        self::assertSame('boven bij de trap', $proposal->fieldUpdates[0]['value']);
+    }
+
+    public function testParsesSpelledDutchPostcodeWithoutHouseNumber(): void
+    {
+        $proposal = (new HeuristicIntakeAnalyzer())->analyze(
+            $this->intake('address'),
+            '3573 Simon Johan',
+            'msg6',
+            0,
+        );
+        self::assertSame('3573 SJ', $proposal->addressHint['postcode']);
+        self::assertNull($proposal->addressHint['house_number']);
+        self::assertSame([], $proposal->fieldUpdates);
+    }
+
+    public function testParsesSpacedPostcodeWithHouseNumber(): void
+    {
+        $proposal = (new HeuristicIntakeAnalyzer())->analyze(
+            $this->intake('address'),
+            '3573 SJ 12',
+            'msg7',
+            0,
+        );
+        self::assertSame('3573 SJ', $proposal->addressHint['postcode']);
+        self::assertSame(12, $proposal->addressHint['house_number']);
+    }
+
+    private function intake(?string $target = null): Intake
     {
         $user = new User('user_test', 'tester');
-        return new Intake('intake_test', $user, 'demo-ledo-1', 'conversation-v1', IntakeDocument::initial(null));
+        $next = $target === null ? null : [
+            'id' => 'ask_'.$target,
+            'target' => $target,
+            'text' => 'vraag',
+        ];
+
+        return new Intake('intake_test', $user, 'demo-ledo-1', 'conversation-v3', IntakeDocument::initial($next));
     }
 }

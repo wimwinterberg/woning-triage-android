@@ -247,8 +247,8 @@ final class IntakeDocument
         $previous = $this->address;
         $revision = (int) ($previous['address_revision'] ?? 0);
         $changed = $previous === null
-            || ($previous['postcode'] ?? null) !== $input['postcode']
-            || (int) ($previous['house_number'] ?? 0) !== (int) $input['house_number']
+            || ($previous['postcode'] ?? null) !== ($input['postcode'] ?? null)
+            || ($previous['house_number'] ?? null) !== ($input['house_number'] ?? null)
             || ($previous['addition'] ?? null) !== ($input['addition'] ?? null);
 
         if ($changed) {

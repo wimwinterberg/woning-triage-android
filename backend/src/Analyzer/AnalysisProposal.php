@@ -9,7 +9,7 @@ final class AnalysisProposal
     /**
      * @param list<array{field: string, state: string, value?: ?string, source: string, evidence_ids: list<string>}> $fieldUpdates
      * @param list<array{text: string, source: string, evidence_ids: list<string>}> $hypotheses
-     * @param array{postcode: string, house_number: int, addition: ?string}|null $addressHint
+     * @param array{postcode: ?string, house_number: ?int, addition: ?string}|null $addressHint
      * @param list<string> $riskSignals
      */
     public function __construct(

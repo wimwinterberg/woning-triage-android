@@ -12,10 +12,12 @@ final class ConversationPromptTest extends TestCase
     public function testNewSessionGreetsImmediatelyAndStaysOnRentalHomes(): void
     {
         $text = ConversationPrompt::text(false, 'nl-NL');
-        self::assertSame('conversation-v2', ConversationPrompt::version());
+        self::assertSame('conversation-v3', ConversationPrompt::version());
         self::assertStringContainsString('Begroet meteen', $text);
         self::assertStringContainsString('huurhuis', $text);
         self::assertStringContainsString('Vraag nooit of het een huur- of koopwoning is', $text);
+        self::assertStringContainsString('vier cijfers en twee letters', $text);
+        self::assertStringContainsString('Simon Johan', $text);
         self::assertStringNotContainsString('koopwoning of huurwoning', $text);
     }
 }

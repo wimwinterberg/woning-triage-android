@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -77,24 +79,40 @@ class AppViewModel(
 
     fun startIntake(voiceMode: Boolean) = run("start") {
         stopVoiceInternal()
-        val intake = api.createIntake(UUID.randomUUID().toString(), CreateIntakeRequest(if (voiceMode) "voice" else "text"))
+        if (voiceMode) {
+            coroutineScope {
+                val offerJob = async { voice.prepareOffer() }
+                val intake = api.createIntake(UUID.randomUUID().toString(), CreateIntakeRequest("voice"))
+                tokens.activeIntakeId = intake.id
+                _state.value = _state.value.copy(
+                    intake = intake,
+                    preferTyping = false,
+                    screen = Screen.Conversation,
+                    transcript = listOfNotNull(intake.nextQuestion?.text?.let { TranscriptLine("assistant", it) }),
+                    connectionLabel = "connecting",
+                )
+                watchIntake(intake.id)
+                runCatching {
+                    completeVoiceStart(intake.id, offerJob.await())
+                }.onFailure { error ->
+                    _state.value = _state.value.copy(
+                        voiceConnected = false,
+                        connectionLabel = "disconnected",
+                        error = friendlyVoiceError(error),
+                    )
+                }
+            }
+            return@run
+        }
+        val intake = api.createIntake(UUID.randomUUID().toString(), CreateIntakeRequest("text"))
         tokens.activeIntakeId = intake.id
         _state.value = _state.value.copy(
             intake = intake,
-            preferTyping = !voiceMode,
+            preferTyping = true,
             screen = Screen.Conversation,
             transcript = listOfNotNull(intake.nextQuestion?.text?.let { TranscriptLine("assistant", it) }),
-            connectionLabel = if (voiceMode) "connecting" else "disconnected",
+            connectionLabel = "disconnected",
         )
-        if (voiceMode) {
-            runCatching { startVoice(intake.id) }.onFailure { error ->
-                _state.value = _state.value.copy(
-                    voiceConnected = false,
-                    connectionLabel = "disconnected",
-                    error = friendlyVoiceError(error),
-                )
-            }
-        }
         watchIntake(intake.id)
     }
 
@@ -208,9 +226,8 @@ class AppViewModel(
     fun goAddress() { _state.value = _state.value.copy(screen = Screen.Address) }
     fun goConversation() { _state.value = _state.value.copy(screen = Screen.Conversation, editingField = null) }
 
-    private suspend fun startVoice(intakeId: String) {
+    private suspend fun completeVoiceStart(intakeId: String, offer: String) {
         _state.value = _state.value.copy(connectionLabel = "connecting")
-        val offer = voice.prepareOffer()
         val session = api.startVoice(intakeId, UUID.randomUUID().toString(), VoiceStartRequest(offer))
         val answer = session.sdpAnswer
         if (session.live && answer != null && nl.woningtriage.app.voice.Sdp.canApplyAnswer(offer, answer)) {
@@ -242,7 +259,7 @@ class AppViewModel(
         watchJob?.cancel()
         watchJob = viewModelScope.launch {
             while (isActive) {
-                delay(1_500)
+                delay(700)
                 val current = _state.value
                 if (current.intake?.id != id || current.busy) {
                     continue
