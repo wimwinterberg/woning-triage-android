@@ -38,6 +38,8 @@ final class LiveGatewayCommand extends Command
         private readonly IntakeService $intakeService,
         #[Autowire('%env(default::OPENAI_API_KEY)%')]
         private readonly ?string $apiKey,
+        #[Autowire('%env(default::OPENAI_LIVE_VOICE)%')]
+        private readonly string $liveVoice = 'marin',
     ) {
         parent::__construct();
     }
@@ -66,6 +68,8 @@ final class LiveGatewayCommand extends Command
         $this->log($output, 'Live gateway waiting for voice sessions. Ctrl+C to stop.');
         $this->log($output, 'Follow logs: docker compose --profile live logs -f live-gateway api');
         $this->log($output, 'Address lookup provider='.WcsAddressProvider::class);
+        $voice = strtolower(trim($this->liveVoice));
+        $this->log($output, 'Live voice='.($voice !== '' ? $voice : 'marin'));
         $idleLoggedAt = 0;
         while (true) {
             $pending = $this->queue->pending();

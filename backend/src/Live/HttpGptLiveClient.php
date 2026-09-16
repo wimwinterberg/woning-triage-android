@@ -18,6 +18,7 @@ final class HttpGptLiveClient implements GptLiveClient
         private readonly ?string $apiKey = '',
         private readonly string $model = 'gpt-live-1',
         private readonly string $baseUrl = 'https://api.openai.com/v1',
+        private readonly string $voice = 'marin',
     ) {
     }
 
@@ -41,6 +42,11 @@ final class HttpGptLiveClient implements GptLiveClient
                     'session' => [
                         'model' => $this->model,
                         'instructions' => $instructions,
+                        'audio' => [
+                            'output' => [
+                                'voice' => $this->voiceName(),
+                            ],
+                        ],
                         'delegation' => ['type' => 'client'],
                     ],
                     'transport' => [
@@ -82,5 +88,12 @@ final class HttpGptLiveClient implements GptLiveClient
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    public function voiceName(): string
+    {
+        $voice = strtolower(trim($this->voice));
+
+        return $voice !== '' ? $voice : 'marin';
     }
 }

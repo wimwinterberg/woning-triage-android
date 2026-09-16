@@ -50,6 +50,9 @@ services:
   - key: OPENAI_LIVE_MODEL
     scope: RUN_TIME
     value: gpt-live-1
+  - key: OPENAI_LIVE_VOICE
+    scope: RUN_TIME
+    value: marin
   - key: SYMFONY_TRUSTED_PROXIES
     scope: RUN_TIME
     value: "127.0.0.1,REMOTE_ADDR,PRIVATE_SUBNETS"
@@ -88,6 +91,9 @@ workers:
   - key: OPENAI_LIVE_MODEL
     scope: RUN_TIME
     value: gpt-live-1
+  - key: OPENAI_LIVE_VOICE
+    scope: RUN_TIME
+    value: marin
 jobs:
 - name: migrate
   kind: PRE_DEPLOY

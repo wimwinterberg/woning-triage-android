@@ -5,6 +5,7 @@ parameters:
     app.live_model: 'gpt-live-1'
     env(OPENAI_API_KEY): ''
     env(WCS_ADDRESS_API_KEY): ''
+    env(OPENAI_LIVE_VOICE): 'marin'
 
 services:
     _defaults:
@@ -38,6 +39,7 @@ services:
         arguments:
             $apiKey: '%env(default::OPENAI_API_KEY)%'
             $model: '%app.live_model%'
+            $voice: '%env(default::OPENAI_LIVE_VOICE)%'
 
     App\Live\GptLiveClient:
         factory: ['App\Live\GptLiveClientFactory', 'create']
@@ -49,6 +51,7 @@ services:
     App\Command\LiveGatewayCommand:
         arguments:
             $apiKey: '%env(default::OPENAI_API_KEY)%'
+            $liveVoice: '%env(default::OPENAI_LIVE_VOICE)%'
 
     App\Analyzer\IntakeAnalyzer: '@App\Analyzer\HeuristicIntakeAnalyzer'
     App\Address\FakeAddressProvider:
