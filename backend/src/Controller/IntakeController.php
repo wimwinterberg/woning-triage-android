@@ -43,7 +43,11 @@ final class IntakeController extends AbstractController
         if ($existing !== null) {
             return new JsonResponse($existing->getResponseBody(), $existing->getStatusCode());
         }
-        $intake = $this->intakeService->create($user, (string) ($body['input_mode'] ?? 'text'));
+        $intake = $this->intakeService->create(
+            $user,
+            (string) ($body['input_mode'] ?? 'text'),
+            isset($body['language']) ? (string) $body['language'] : null,
+        );
         $payload = $this->intakeService->present($intake);
         $this->idempotency->store($user->getId(), 'none', 'create_intake', $key, $body, 201, $payload);
 
@@ -113,6 +117,7 @@ final class IntakeController extends AbstractController
             $this->intValue($body, 'expected_revision'),
             (string) ($body['mode'] ?? ''),
             isset($body['language']) ? (string) $body['language'] : null,
+            array_key_exists('accept_ui_offer', $body) ? $body['accept_ui_offer'] : null,
         );
         $payload = $this->intakeService->present($intake);
         $this->idempotency->store($user->getId(), $id, 'language', $key, $body, 200, $payload);

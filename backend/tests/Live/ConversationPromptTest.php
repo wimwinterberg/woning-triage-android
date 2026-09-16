@@ -15,7 +15,8 @@ final class ConversationPromptTest extends TestCase
         self::assertSame('conversation-v10', ConversationPrompt::version());
         self::assertStringContainsString('Begroet meteen', $text);
         self::assertStringContainsString('Schakel niet terug naar het Nederlands', $text);
-        self::assertStringContainsString('Engels, Duits, Turks, Japans', $text);
+        self::assertStringContainsString('app-schermen', $text);
+        self::assertStringContainsString('voordat de bewoner ja zegt', $text);
         self::assertStringContainsString('Sierra Juliet', $text);
         self::assertStringContainsString('three five seven three', $text);
         self::assertStringContainsString('huurhuis', $text);

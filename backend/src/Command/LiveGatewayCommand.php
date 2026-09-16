@@ -138,6 +138,7 @@ final class LiveGatewayCommand extends Command
         }
         $client->setTimeout(1);
         $lastSpokenFollowUp = '';
+        $lastSpokenUiOffer = '';
         $lastResidentAt = microtime(true);
         $idlePrompted = false;
         $idlePolicy = LiveIdlePolicy::fromEnv($this->idlePromptSeconds, $this->idleCloseSeconds);
@@ -148,6 +149,7 @@ final class LiveGatewayCommand extends Command
             } catch (ConnectionTimeoutException) {
                 $this->entityManager->refresh($session);
                 $this->maybeSpeakPendingFollowUp($session, $client, $output, $lastSpokenFollowUp, $lastResidentAt, $idlePrompted);
+                $this->maybeSpeakUiOffer($session, $client, $output, $lastSpokenUiOffer);
                 $this->markActivityIfIntakeChanged($session, $lastIntakeRevision, $lastResidentAt, $idlePrompted);
                 if ($this->handleIdle($session, $client, $output, $idlePolicy, $lastResidentAt, $idlePrompted, $transcript, $audioChunks)) {
                     break;
@@ -188,7 +190,7 @@ final class LiveGatewayCommand extends Command
             }
             if ($type === 'session.delegation.created' && ($payload['delegation']['target'] ?? '') === 'client') {
                 $this->markResidentActivity($lastResidentAt, $idlePrompted);
-                $this->handleDelegation($session, $client, $output, $payload, $transcript, $lastSpokenFollowUp);
+                $this->handleDelegation($session, $client, $output, $payload, $transcript, $lastSpokenFollowUp, $lastSpokenUiOffer);
                 $transcript = '';
                 continue;
             }
@@ -216,6 +218,7 @@ final class LiveGatewayCommand extends Command
         array $payload,
         string $transcript,
         string &$lastSpokenFollowUp,
+        string &$lastSpokenUiOffer,
     ): void {
         $delegationId = (string) ($payload['delegation']['id'] ?? '');
         $intake = $session->getIntake();
@@ -274,11 +277,17 @@ final class LiveGatewayCommand extends Command
         $ms = (int) round((microtime(true) - $started) * 1000);
         $sameQuestion = $previousQuestion !== '' && $previousQuestion === $next;
         $thankYou = $intake->document()->spokenFollowUp;
-        $content = is_string($thankYou) && $thankYou !== ''
-            ? \App\Live\LiveFollowUpSpeech::afterAddressVerified($thankYou, (string) $next, $language)
-            : \App\Live\LiveFollowUpSpeech::commentary((string) $next, $language, $sameQuestion);
+        $offer = $intake->document()->uiLanguageOffer;
+        $offerQuestion = is_array($offer) && is_string($offer['question'] ?? null) ? (string) $offer['question'] : '';
         if (is_string($thankYou) && $thankYou !== '') {
+            $content = \App\Live\LiveFollowUpSpeech::afterAddressVerified($thankYou, (string) $next, $language);
             $lastSpokenFollowUp = $thankYou;
+        } elseif ($offerQuestion !== '') {
+            $content = \App\Live\LiveFollowUpSpeech::uiLanguageOffer($offerQuestion, $language)
+                .' Then ask this next question: '.$next;
+            $lastSpokenUiOffer = $offerQuestion;
+        } else {
+            $content = \App\Live\LiveFollowUpSpeech::commentary((string) $next, $language, $sameQuestion);
         }
         $this->sendEvent($client, [
             'type' => 'session.commentary.append',
@@ -328,6 +337,30 @@ final class LiveGatewayCommand extends Command
             'content' => \App\Live\LiveFollowUpSpeech::afterAddressVerified($thankYou, $next, $language),
         ]);
         $this->log($output, 'spoken address thank-you language='.$language.' text='.$this->clip($thankYou));
+    }
+
+    private function maybeSpeakUiOffer(
+        VoiceSession $session,
+        WebSocketClient $client,
+        OutputInterface $output,
+        string &$lastSpokenUiOffer,
+    ): void {
+        $intake = $session->getIntake();
+        $this->entityManager->refresh($intake);
+        $offer = $intake->document()->uiLanguageOffer;
+        $question = is_array($offer) && is_string($offer['question'] ?? null) ? (string) $offer['question'] : '';
+        if ($question === '' || $question === $lastSpokenUiOffer) {
+            return;
+        }
+        $lastSpokenUiOffer = $question;
+        $language = $intake->getConversationLanguage();
+        $this->sendEvent($client, [
+            'type' => 'session.commentary.append',
+            'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
+            'delegation_id' => null,
+            'content' => \App\Live\LiveFollowUpSpeech::uiLanguageOffer($question, $language),
+        ]);
+        $this->log($output, 'spoken UI language offer language='.$language.' text='.$this->clip($question));
     }
 
     private function markActivityIfIntakeChanged(
@@ -483,13 +516,14 @@ final class LiveGatewayCommand extends Command
         $intake = $session->getIntake();
         $this->entityManager->refresh($intake);
         $opening = (string) ($intake->document()->nextQuestion['text'] ?? '');
-        $spoken = LiveGreeting::spoken($opening);
+        $language = $intake->getConversationLanguage();
+        $spoken = LiveGreeting::spoken($opening, $language);
         $instructionId = \App\Domain\IdGenerator::prefixed('evt');
         $this->sendEvent($client, [
             'type' => 'session.instructions.append',
             'event_id' => $instructionId,
             'delegation_id' => null,
-            'content' => LiveGreeting::instructions($spoken),
+            'content' => LiveGreeting::instructions($spoken, $language),
         ]);
         $acked = $this->awaitClientAck($client, $output, $instructionId, 'session.instructions.appended', 2);
         $this->sendEvent($client, [

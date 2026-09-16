@@ -19,6 +19,8 @@ data class Intake(
     @SerialName("next_question") val nextQuestion: NextQuestion? = null,
     @SerialName("spoken_follow_up") val spokenFollowUp: String? = null,
     @SerialName("idle_notice") val idleNotice: String? = null,
+    @SerialName("ui_language") val uiLanguage: String? = null,
+    @SerialName("ui_language_offer") val uiLanguageOffer: UiLanguageOffer? = null,
     val summary: Summary? = null,
     val address: AddressState? = null,
     @SerialName("report_id") val reportId: String? = null,
@@ -27,6 +29,13 @@ data class Intake(
     @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("confirmed_at") val confirmedAt: String? = null,
     val voice: IntakeVoice? = null,
+)
+
+@Serializable
+data class UiLanguageOffer(
+    val language: String,
+    val reason: String? = null,
+    val question: String? = null,
 )
 
 @Serializable

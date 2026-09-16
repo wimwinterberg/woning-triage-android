@@ -30,10 +30,10 @@ class TokenStore(context: Context) {
             prefs.edit().putString("access_token", value).apply()
         }
 
-    var activeIntakeId: String?
-        get() = prefs.getString("active_intake_id", null)
+    var uiLocale: String
+        get() = prefs.getString("ui_locale", null) ?: "nl-NL"
         set(value) {
-            prefs.edit().putString("active_intake_id", value).apply()
+            prefs.edit().putString("ui_locale", value).apply()
         }
 }
 

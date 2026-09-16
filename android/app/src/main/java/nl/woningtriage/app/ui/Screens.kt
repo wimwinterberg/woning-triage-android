@@ -26,12 +26,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,13 +59,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import nl.woningtriage.app.R
 import nl.woningtriage.app.domain.Intake
 import nl.woningtriage.app.location.DeviceAddressLocator
@@ -72,15 +76,27 @@ import nl.woningtriage.app.location.DeviceAddressLocator
 fun WoningtriageRoot(viewModel: AppViewModel) {
     val state by viewModel.state.collectAsState()
     AppLocale(state.uiLocale) {
-        when (state.screen) {
-            Screen.Activation -> ActivationScreen(state, viewModel)
-            Screen.Start -> StartScreen(state, viewModel)
-            Screen.Conversation -> ConversationScreen(state, viewModel)
-            Screen.Address -> AddressScreen(state, viewModel)
-            Screen.Review -> ReviewScreen(state, viewModel)
-            Screen.Completed -> CompletedScreen(state, viewModel)
-            Screen.ReviewRequired -> ReviewRequiredScreen(state, viewModel)
-            Screen.FieldEdit -> FieldEditScreen(state, viewModel)
+        Box {
+            when (state.screen) {
+                Screen.Activation -> ActivationScreen(state, viewModel)
+                Screen.Start -> StartScreen(state, viewModel)
+                Screen.Conversation -> ConversationScreen(state, viewModel)
+                Screen.Address -> AddressScreen(state, viewModel)
+                Screen.Review -> ReviewScreen(state, viewModel)
+                Screen.Completed -> CompletedScreen(state, viewModel)
+                Screen.ReviewRequired -> ReviewRequiredScreen(state, viewModel)
+                Screen.FieldEdit -> FieldEditScreen(state, viewModel)
+            }
+            if (state.showLanguagePicker) {
+                LanguagePickerDialog(state.uiLocale, viewModel::selectUiLanguage, viewModel::closeLanguagePicker)
+            }
+            state.uiOffer?.let { offer ->
+                UiLanguageOfferDialog(
+                    question = offer.question ?: stringResource(R.string.switch_ui_question),
+                    onYes = viewModel::acceptUiOffer,
+                    onNo = viewModel::declineUiOffer,
+                )
+            }
         }
     }
 }
@@ -98,6 +114,7 @@ private fun AppLocale(tag: String, content: @Composable () -> Unit) {
     CompositionLocalProvider(
         LocalContext provides wrapped,
         LocalConfiguration provides wrapped.resources.configuration,
+        LocalLayoutDirection provides if (UiLocale.isRtl(tag)) LayoutDirection.Rtl else LayoutDirection.Ltr,
     ) {
         content()
     }
@@ -132,6 +149,16 @@ private fun StartScreen(state: AppUiState, viewModel: AppViewModel) {
         if (granted) viewModel.startIntake(true) else viewModel.startIntake(false)
     }
     PaperScaffold(footer = { PrivacyFooter() }) {
+        TextButton(
+            onClick = viewModel::openLanguagePicker,
+            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+        ) {
+            Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text(
+                stringResource(R.string.change_language) + " · " + SupportedLanguages.nativeName(state.uiLocale),
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
         BrandMark()
         Text(stringResource(R.string.start_headline), style = MaterialTheme.typography.displaySmall)
         Icon(
@@ -638,4 +665,46 @@ private fun statusLabel(state: AppUiState): String = when (state.connectionLabel
     "processing" -> stringResource(R.string.processing)
     "idle_closed" -> stringResource(R.string.idle_closed)
     else -> stringResource(R.string.disconnected)
+}
+
+@Composable
+private fun LanguagePickerDialog(current: String, onSelect: (String) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.language_picker_title)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                SupportedLanguages.all.forEach { language ->
+                    val selected = UiLocale.fromTag(current) == language.tag
+                    Text(
+                        language.nativeName + "  ·  " + language.nameNl,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(language.tag) }
+                            .padding(vertical = 10.dp),
+                        style = if (selected) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
+    )
+}
+
+@Composable
+private fun UiLanguageOfferDialog(question: String, onYes: () -> Unit, onNo: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onNo,
+        title = { Text(stringResource(R.string.change_language)) },
+        text = { Text(question) },
+        confirmButton = {
+            TextButton(onClick = onYes) { Text(stringResource(R.string.switch_ui_yes)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onNo) { Text(stringResource(R.string.switch_ui_no)) }
+        },
+    )
 }

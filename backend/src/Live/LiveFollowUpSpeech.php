@@ -105,22 +105,33 @@ final class LiveFollowUpSpeech
         return $pace.' '.$lock.' Say this exactly, then pause and listen: '.$spoken;
     }
 
+    public static function uiLanguageOffer(string $question, string $language): string
+    {
+        return self::sayExactly($question, $language);
+    }
+
     public static function spokenLanguageName(string $language): string
     {
         return match (true) {
+            str_starts_with($language, 'pap') => 'Papiamentu',
+            str_starts_with($language, 'zgh') => 'Tamazight',
             str_starts_with($language, 'en') => 'English',
             str_starts_with($language, 'de') => 'German',
             str_starts_with($language, 'tr') => 'Turkish',
             str_starts_with($language, 'ja') => 'Japanese',
             str_starts_with($language, 'nl') => 'Dutch',
+            str_starts_with($language, 'fr') => 'French',
+            str_starts_with($language, 'es') => 'Spanish',
+            str_starts_with($language, 'ar') => 'Arabic',
+            str_starts_with($language, 'pl') => 'Polish',
             default => $language,
         };
     }
 
     public static function hasNativeTreeText(string $language): bool
     {
-        $prefix = strtolower(substr($language, 0, 2));
+        $prefix = \App\Domain\UiLanguages::prefix($language);
 
-        return in_array($prefix, ['nl', 'en', 'de', 'tr', 'ja'], true);
+        return in_array($prefix, ['nl', 'en', 'de', 'tr', 'ja', 'fr', 'es', 'ar', 'pl', 'pap', 'zgh'], true);
     }
 }

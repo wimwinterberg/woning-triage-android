@@ -54,6 +54,8 @@ data class AppUiState(
     val voiceSessionId: String? = null,
     val selectedCandidateId: String? = null,
     val uiLocale: String = "nl-NL",
+    val showLanguagePicker: Boolean = false,
+    val uiOffer: nl.woningtriage.app.domain.UiLanguageOffer? = null,
 )
 
 enum class Screen { Activation, Start, Conversation, Address, Review, Completed, ReviewRequired, FieldEdit }
@@ -64,7 +66,11 @@ class AppViewModel(
     private val voice: VoiceSessionClient,
 ) : ViewModel() {
     private val _state = MutableStateFlow(
-        AppUiState(hasToken = tokens.accessToken != null, screen = if (tokens.accessToken == null) Screen.Activation else Screen.Start),
+        AppUiState(
+            hasToken = tokens.accessToken != null,
+            screen = if (tokens.accessToken == null) Screen.Activation else Screen.Start,
+            uiLocale = tokens.uiLocale,
+        ),
     )
     val state: StateFlow<AppUiState> = _state
     private var confirmKey: String? = null
@@ -88,7 +94,7 @@ class AppViewModel(
         if (voiceMode) {
             coroutineScope {
                 val offerJob = async { voice.prepareOffer() }
-                val intake = api.createIntake(UUID.randomUUID().toString(), CreateIntakeRequest("voice"))
+                val intake = api.createIntake(UUID.randomUUID().toString(), CreateIntakeRequest("voice", _state.value.uiLocale))
                 tokens.activeIntakeId = intake.id
                 _state.value = _state.value.copy(
                     intake = intake,
@@ -96,7 +102,7 @@ class AppViewModel(
                     screen = Screen.Conversation,
                     transcript = listOfNotNull(intake.nextQuestion?.text?.let { TranscriptLine("assistant", it) }),
                     connectionLabel = "connecting",
-                    uiLocale = UiLocale.fromConversation(intake.conversationLanguage),
+                    uiLocale = intake.uiLanguage ?: _state.value.uiLocale,
                 )
                 watchIntake(intake.id)
                 runCatching {
@@ -111,7 +117,7 @@ class AppViewModel(
             }
             return@run
         }
-        val intake = api.createIntake(UUID.randomUUID().toString(), CreateIntakeRequest("text"))
+        val intake = api.createIntake(UUID.randomUUID().toString(), CreateIntakeRequest("text", _state.value.uiLocale))
         tokens.activeIntakeId = intake.id
         _state.value = _state.value.copy(
             intake = intake,
@@ -119,7 +125,7 @@ class AppViewModel(
             screen = Screen.Conversation,
             transcript = listOfNotNull(intake.nextQuestion?.text?.let { TranscriptLine("assistant", it) }),
             connectionLabel = "disconnected",
-            uiLocale = UiLocale.fromConversation(intake.conversationLanguage),
+            uiLocale = intake.uiLanguage ?: _state.value.uiLocale,
         )
         watchIntake(intake.id)
     }
@@ -131,7 +137,8 @@ class AppViewModel(
             intake = intake,
             screen = screenFor(intake),
             error = null,
-            uiLocale = UiLocale.fromConversation(intake.conversationLanguage),
+            uiLocale = intake.uiLanguage ?: tokens.uiLocale,
+            uiOffer = intake.uiLanguageOffer,
         )
         if (intake.status == "collecting" || intake.status == "ready_for_confirmation") {
             watchIntake(intake.id)
@@ -224,7 +231,7 @@ class AppViewModel(
             screen = Screen.Address,
             error = null,
             transcript = transcript,
-            uiLocale = UiLocale.fromConversation(verified.conversationLanguage),
+            uiLocale = verified.uiLanguage ?: _state.value.uiLocale,
         )
     }
 
@@ -337,13 +344,71 @@ class AppViewModel(
     fun goAddress() { _state.value = _state.value.copy(screen = Screen.Address) }
     fun goConversation() { _state.value = _state.value.copy(screen = Screen.Conversation, editingField = null) }
 
+    fun openLanguagePicker() {
+        _state.value = _state.value.copy(showLanguagePicker = true)
+    }
+
+    fun closeLanguagePicker() {
+        _state.value = _state.value.copy(showLanguagePicker = false)
+    }
+
+    fun selectUiLanguage(tag: String) = run("language") {
+        val normalized = UiLocale.fromTag(tag)
+        tokens.uiLocale = normalized
+        _state.value = _state.value.copy(uiLocale = normalized, showLanguagePicker = false)
+        val intake = _state.value.intake ?: return@run
+        val updated = api.changeLanguage(
+            intake.id,
+            UUID.randomUUID().toString(),
+            nl.woningtriage.app.data.api.LanguagePatchRequest(
+                expectedRevision = intake.revision,
+                mode = "manual",
+                language = normalized,
+            ),
+        )
+        applyLanguageIntake(updated)
+    }
+
+    fun acceptUiOffer() = answerUiOffer(true)
+    fun declineUiOffer() = answerUiOffer(false)
+
+    private fun answerUiOffer(accept: Boolean) = run("ui-offer") {
+        val intake = _state.value.intake ?: return@run
+        val updated = api.changeLanguage(
+            intake.id,
+            UUID.randomUUID().toString(),
+            nl.woningtriage.app.data.api.LanguagePatchRequest(
+                expectedRevision = intake.revision,
+                mode = "auto",
+                acceptUiOffer = accept,
+            ),
+        )
+        if (accept) {
+            val ui = updated.uiLanguage ?: _state.value.uiLocale
+            tokens.uiLocale = ui
+        }
+        applyLanguageIntake(updated)
+    }
+
+    private fun applyLanguageIntake(intake: Intake) {
+        val ui = intake.uiLanguage ?: _state.value.uiLocale
+        tokens.uiLocale = ui
+        _state.value = _state.value.copy(
+            intake = intake,
+            uiLocale = ui,
+            uiOffer = intake.uiLanguageOffer,
+            showLanguagePicker = false,
+        )
+    }
+
     private suspend fun completeVoiceStart(intakeId: String, offer: String) {
         _state.value = _state.value.copy(connectionLabel = "connecting")
         val session = api.startVoice(intakeId, UUID.randomUUID().toString(), VoiceStartRequest(offer))
         val answer = session.sdpAnswer
         if (session.live && answer != null && nl.woningtriage.app.voice.Sdp.canApplyAnswer(offer, answer)) {
             val opening = _state.value.intake?.nextQuestion?.text.orEmpty()
-            voice.requestOpeningGreeting(opening)
+            val language = _state.value.intake?.conversationLanguage ?: _state.value.uiLocale
+            voice.requestOpeningGreeting(opening, language)
             voice.setOnConnectionLost {
                 if (_state.value.connectionLabel == "idle_closed") {
                     return@setOnConnectionLost
@@ -356,7 +421,7 @@ class AppViewModel(
                 }
             }
             voice.applyRemoteAnswer(answer)
-            voice.requestOpeningGreeting(opening)
+            voice.requestOpeningGreeting(opening, language)
             _state.value = _state.value.copy(voiceConnected = true, connectionLabel = "connected", voiceSessionId = session.id)
         } else {
             _state.value = _state.value.copy(
@@ -412,6 +477,9 @@ class AppViewModel(
         intake.idleNotice?.takeIf { it.isNotBlank() && transcript.none { line -> line.text == it } }?.let {
             transcript += TranscriptLine("assistant", it)
         }
+        intake.uiLanguageOffer?.question?.takeIf { it.isNotBlank() && transcript.none { line -> line.text == it } }?.let {
+            transcript += TranscriptLine("assistant", it)
+        }
         if (question != null && transcript.none { it.speaker == "assistant" && it.text == question }) {
             transcript += TranscriptLine("assistant", question)
         }
@@ -438,7 +506,8 @@ class AppViewModel(
                 _state.value.busy -> "processing"
                 else -> _state.value.connectionLabel
             },
-            uiLocale = UiLocale.fromConversation(intake.conversationLanguage),
+            uiLocale = intake.uiLanguage ?: _state.value.uiLocale,
+            uiOffer = intake.uiLanguageOffer,
         )
         if (screen == Screen.Completed || screen == Screen.ReviewRequired) {
             watchJob?.cancel()

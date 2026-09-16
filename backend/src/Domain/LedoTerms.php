@@ -14,11 +14,11 @@ final class LedoTerms
      * @var array<string, array<string, string>>
      */
     private const TERMS = [
-        'Keuken' => ['en' => 'Kitchen', 'de' => 'Küche', 'tr' => 'Mutfak', 'ja' => '台所'],
-        'Badkamer' => ['en' => 'Bathroom', 'de' => 'Badezimmer', 'tr' => 'Banyo', 'ja' => '浴室'],
-        'Toilet' => ['en' => 'Toilet', 'de' => 'Toilette', 'tr' => 'Tuvalet', 'ja' => 'トイレ'],
-        'Woonkamer' => ['en' => 'Living room', 'de' => 'Wohnzimmer', 'tr' => 'Oturma odası', 'ja' => '居間'],
-        'Slaapkamer' => ['en' => 'Bedroom', 'de' => 'Schlafzimmer', 'tr' => 'Yatak odası', 'ja' => '寝室'],
+        'Keuken' => ['en' => 'Kitchen', 'de' => 'Küche', 'tr' => 'Mutfak', 'ja' => '台所', 'fr' => 'Cuisine', 'es' => 'Cocina', 'ar' => 'المطبخ', 'pl' => 'Kuchnia', 'pap' => 'Kushina', 'zgh' => 'Taxxamt'],
+        'Badkamer' => ['en' => 'Bathroom', 'de' => 'Badezimmer', 'tr' => 'Banyo', 'ja' => '浴室', 'fr' => 'Salle de bain', 'es' => 'Baño', 'ar' => 'الحمام', 'pl' => 'Łazienka', 'pap' => 'Baño', 'zgh' => 'Taxxamt n waman'],
+        'Toilet' => ['en' => 'Toilet', 'de' => 'Toilette', 'tr' => 'Tuvalet', 'ja' => 'トイレ', 'fr' => 'Toilettes', 'es' => 'Aseo', 'ar' => 'المرحاض', 'pl' => 'Toaleta', 'pap' => 'Toilet', 'zgh' => 'Amenḍi'],
+        'Woonkamer' => ['en' => 'Living room', 'de' => 'Wohnzimmer', 'tr' => 'Oturma odası', 'ja' => '居間', 'fr' => 'Salon', 'es' => 'Salón', 'ar' => 'غرفة المعيشة', 'pl' => 'Salon', 'pap' => 'Sala', 'zgh' => 'Taxxamt n usgunfu'],
+        'Slaapkamer' => ['en' => 'Bedroom', 'de' => 'Schlafzimmer', 'tr' => 'Yatak odası', 'ja' => '寝室', 'fr' => 'Chambre', 'es' => 'Dormitorio', 'ar' => 'غرفة النوم', 'pl' => 'Sypialnia', 'pap' => 'Kuarto di drumi', 'zgh' => 'Taxxamt n ugun'],
         'Gang' => ['en' => 'Hallway', 'de' => 'Flur', 'tr' => 'Koridor', 'ja' => '廊下'],
         'Zolder' => ['en' => 'Attic', 'de' => 'Dachboden', 'tr' => 'Tavan arası', 'ja' => '屋根裏'],
         'Kelder' => ['en' => 'Basement', 'de' => 'Keller', 'tr' => 'Bodrum', 'ja' => '地下室'],
@@ -50,7 +50,7 @@ final class LedoTerms
         if ($value === null || $value === '') {
             return $value;
         }
-        $prefix = strtolower(substr($language, 0, 2));
+        $prefix = UiLanguages::prefix($language);
         if ($prefix === 'nl') {
             return $value;
         }

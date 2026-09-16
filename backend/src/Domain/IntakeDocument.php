@@ -35,6 +35,11 @@ final class IntakeDocument
         public ?string $pendingSummaryQuestionId = null,
         public ?string $spokenFollowUp = null,
         public ?string $idleNotice = null,
+        public ?string $uiLanguage = 'nl-NL',
+        /** @var array{language?: string, reason?: string, question?: string}|null */
+        public ?array $uiLanguageOffer = null,
+        /** @var list<string> */
+        public array $uiLanguageDeclined = [],
     ) {
     }
 
@@ -87,6 +92,16 @@ final class IntakeDocument
             idleNotice: isset($data['idle_notice']) && is_string($data['idle_notice']) && $data['idle_notice'] !== ''
                 ? $data['idle_notice']
                 : null,
+            uiLanguage: isset($data['ui_language']) && is_string($data['ui_language']) && $data['ui_language'] !== ''
+                ? $data['ui_language']
+                : 'nl-NL',
+            uiLanguageOffer: isset($data['ui_language_offer']) && is_array($data['ui_language_offer'])
+                ? $data['ui_language_offer']
+                : null,
+            uiLanguageDeclined: array_values(array_filter(
+                $data['ui_language_declined'] ?? [],
+                static fn (mixed $tag): bool => is_string($tag) && $tag !== '',
+            )),
         );
     }
 
@@ -115,6 +130,9 @@ final class IntakeDocument
             'pending_summary_question_id' => $this->pendingSummaryQuestionId,
             'spoken_follow_up' => $this->spokenFollowUp,
             'idle_notice' => $this->idleNotice,
+            'ui_language' => $this->uiLanguage,
+            'ui_language_offer' => $this->uiLanguageOffer,
+            'ui_language_declined' => $this->uiLanguageDeclined,
         ];
     }
 

@@ -58,4 +58,9 @@
     <string name="open_settings">Einstellungen öffnen</string>
     <string name="retry">Erneut versuchen</string>
     <string name="cancel">Abbrechen</string>
+    <string name="change_language">Sprache ändern</string>
+    <string name="language_picker_title">Sprache wählen</string>
+    <string name="switch_ui_question">Soll die App auch in dieser Sprache angezeigt werden?</string>
+    <string name="switch_ui_yes">Ja, App umstellen</string>
+    <string name="switch_ui_no">Nein, Bildschirme so lassen</string>
 </resources>

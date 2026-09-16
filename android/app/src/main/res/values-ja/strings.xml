@@ -58,4 +58,9 @@
     <string name="open_settings">設定を開く</string>
     <string name="retry">再試行</string>
     <string name="cancel">キャンセル</string>
+    <string name="change_language">言語を変更</string>
+    <string name="language_picker_title">言語を選ぶ</string>
+    <string name="switch_ui_question">アプリの画面もこの言語にしますか。</string>
+    <string name="switch_ui_yes">はい、切り替えます</string>
+    <string name="switch_ui_no">いいえ、このまま</string>
 </resources>

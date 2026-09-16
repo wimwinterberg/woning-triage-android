@@ -40,11 +40,24 @@ final class IntakeApiTest extends WebTestCase
         }
     }
 
+    public function testCreateIntakeHonoursChosenUiLanguage(): void
+    {
+        $intake = $this->postJson('/api/v1/intakes', $this->tokenA, [
+            'input_mode' => 'text',
+            'language' => 'tr-TR',
+        ], 'create-tr', 201);
+        self::assertSame('tr-TR', $intake['conversation_language']);
+        self::assertSame('tr-TR', $intake['ui_language']);
+        self::assertNull($intake['ui_language_offer']);
+    }
+
     public function testKitchenTapFlowWithUnknownCauseAddressAndSingleReport(): void
     {
         $intake = $this->createIntake($this->tokenA);
         self::assertSame('collecting', $intake['status']);
         self::assertSame('nl-NL', $intake['conversation_language']);
+        self::assertSame('nl-NL', $intake['ui_language']);
+        self::assertNull($intake['ui_language_offer']);
         self::assertSame('opening', $intake['next_question']['id']);
 
         $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
@@ -445,6 +458,9 @@ final class IntakeApiTest extends WebTestCase
         ], 'en-msg', 202);
         $intake = $this->getIntake($intake['id'], $this->tokenA);
         self::assertSame('en-GB', $intake['conversation_language']);
+        self::assertSame('nl-NL', $intake['ui_language']);
+        self::assertSame('en-GB', $intake['ui_language_offer']['language'] ?? null);
+        self::assertNotSame('', $intake['ui_language_offer']['question'] ?? '');
 
         $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
             'expected_revision' => $intake['revision'],
@@ -453,6 +469,16 @@ final class IntakeApiTest extends WebTestCase
         ], 'ok-msg', 202);
         $intake = $this->getIntake($intake['id'], $this->tokenA);
         self::assertSame('en-GB', $intake['conversation_language']);
+        self::assertSame('nl-NL', $intake['ui_language']);
+        self::assertSame('en-GB', $intake['ui_language_offer']['language'] ?? null);
+
+        $accepted = $this->patchJson('/api/v1/intakes/'.$intake['id'].'/language', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'mode' => 'auto',
+            'accept_ui_offer' => true,
+        ], 'ui-yes');
+        self::assertSame('en-GB', $accepted['ui_language']);
+        self::assertNull($accepted['ui_language_offer']);
 
         $stopped = $this->postJson('/api/v1/intakes/'.$intake['id'].'/voice-sessions/'.$session['id'].'/stop', $this->tokenA, [], 'voice-stop', 202);
         self::assertSame('closed', $stopped['status']);

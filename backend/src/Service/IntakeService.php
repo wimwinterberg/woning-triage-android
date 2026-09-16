@@ -56,19 +56,29 @@ final class IntakeService
     ) {
     }
 
-    public function create(User $user, string $inputMode): Intake
+    public function create(User $user, string $inputMode, ?string $language = null): Intake
     {
         if (!in_array($inputMode, ['voice', 'text'], true)) {
             throw new ValidationFailedException('input_mode moet voice of text zijn.');
         }
+        $ui = \App\Domain\UiLanguages::DUTCH;
+        if ($language !== null && trim($language) !== '') {
+            $normalized = \App\Domain\UiLanguages::normalize($language);
+            if ($normalized === null) {
+                throw new ValidationFailedException('Ongeldige taaltag.');
+            }
+            $ui = $normalized;
+        }
         $tree = $this->treeRepository->getActivePublished();
-        $opening = $this->treeEngine->next($tree, \App\Domain\IntakeDocument::initial(null), 'nl-NL');
+        $opening = $this->treeEngine->next($tree, \App\Domain\IntakeDocument::initial(null), $ui);
         $document = \App\Domain\IntakeDocument::initial([
             'id' => $opening['id'],
             'target' => $opening['target'],
             'text' => $opening['text'],
         ]);
+        $document->uiLanguage = $ui;
         $intake = new Intake(IdGenerator::prefixed('intake'), $user, (string) $tree['version'], $this->promptVersion, $document);
+        $intake->setConversationLanguage($ui);
         $this->entityManager->persist($intake);
         $this->entityManager->flush();
         $this->events->publish($intake, 'intake.updated');
@@ -146,6 +156,18 @@ final class IntakeService
             $document = $intake->document();
             $spokenYes = $this->isSpokenYes($text, $proposal->explicitConfirmationAttempt);
             $wasOnSummary = $this->isOnSpokenSummaryQuestion($document);
+            if ($this->tryResolveSpokenUiOffer($intake, $document, $text, $spokenYes, $wasOnSummary)) {
+                $this->refreshNextQuestion($intake, $document);
+                $intake->replaceDocument($document);
+                $intake->bumpRevision();
+                $task->succeed($intake->getRevision());
+                $this->maybeAddAssistantQuestion($intake, $document);
+                $this->events->publish($intake, 'intake.updated');
+                $this->events->publish($intake, 'task.updated', ['task_id' => $task->getId(), 'status' => $task->getStatus()]);
+                $this->entityManager->flush();
+
+                return;
+            }
             if ($this->shouldConfirmSpokenSummary($intake, $document, $spokenYes)) {
                 $this->confirmSpokenReport($intake, $document, $task, $messageId);
 
@@ -165,6 +187,7 @@ final class IntakeService
             if ($proposal->suggestedLanguage !== null) {
                 $intake->setConversationLanguage($proposal->suggestedLanguage);
                 $document->invalidateSummary();
+                $this->maybeOfferUiLanguage($intake, $document);
             }
 
             $hint = $proposal->addressHint;
@@ -266,19 +289,29 @@ final class IntakeService
         return $intake;
     }
 
-    public function changeLanguage(Intake $intake, int $expectedRevision, string $mode, ?string $language): Intake
+    public function changeLanguage(Intake $intake, int $expectedRevision, string $mode, ?string $language, mixed $acceptUiOffer = null): Intake
     {
         $this->assertMutable($intake);
         $intake->assertExpectedRevision($expectedRevision);
-        $languageMode = LanguageMode::tryFrom($mode) ?? throw new ValidationFailedException('Ongeldige taalmodus.');
-        if ($languageMode === LanguageMode::Manual) {
-            if ($language === null || !preg_match('/^[a-z]{2}(-[A-Z]{2})?$/', $language)) {
-                throw new ValidationFailedException('Ongeldige taaltag.');
-            }
-            $intake->setConversationLanguage($language);
-        }
-        $intake->setLanguageMode($languageMode);
         $document = $intake->document();
+        if ($acceptUiOffer === true || $acceptUiOffer === false) {
+            $this->resolveUiLanguageOffer($document, $acceptUiOffer === true);
+        }
+        if ($mode !== '') {
+            $languageMode = LanguageMode::tryFrom($mode) ?? throw new ValidationFailedException('Ongeldige taalmodus.');
+            if ($languageMode === LanguageMode::Manual) {
+                $normalized = \App\Domain\UiLanguages::normalize((string) $language);
+                if ($normalized === null) {
+                    throw new ValidationFailedException('Ongeldige taaltag.');
+                }
+                $intake->setConversationLanguage($normalized);
+                $document->uiLanguage = $normalized;
+                $document->uiLanguageOffer = null;
+            }
+            $intake->setLanguageMode($languageMode);
+        } elseif ($acceptUiOffer === null) {
+            throw new ValidationFailedException('Ongeldige taalmodus.');
+        }
         $document->invalidateSummary();
         $this->refreshNextQuestion($intake, $document);
         $intake->replaceDocument($document);
@@ -1373,6 +1406,77 @@ final class IntakeService
         return is_string($existing) && $existing !== '' ? $existing : null;
     }
 
+    private function maybeOfferUiLanguage(Intake $intake, \App\Domain\IntakeDocument $document): void
+    {
+        $target = \App\Domain\UiLanguages::uiTagForConversation($intake->getConversationLanguage());
+        $current = \App\Domain\UiLanguages::normalize((string) $document->uiLanguage) ?? \App\Domain\UiLanguages::DUTCH;
+        if (strcasecmp($target, $current) === 0) {
+            return;
+        }
+        if (in_array($target, $document->uiLanguageDeclined, true)) {
+            return;
+        }
+        $supported = \App\Domain\UiLanguages::isSupported($intake->getConversationLanguage());
+        $offer = [
+            'language' => $target,
+            'reason' => $supported ? 'detected' : 'unsupported',
+        ];
+        $offer['question'] = \App\Domain\UiLanguages::offerQuestion($offer, $intake->getConversationLanguage());
+        $document->uiLanguageOffer = $offer;
+    }
+
+    private function resolveUiLanguageOffer(\App\Domain\IntakeDocument $document, bool $accept): void
+    {
+        $offer = $document->uiLanguageOffer;
+        if (!is_array($offer)) {
+            return;
+        }
+        $target = \App\Domain\UiLanguages::normalize((string) ($offer['language'] ?? '')) ?? \App\Domain\UiLanguages::ENGLISH;
+        if ($accept) {
+            $document->uiLanguage = $target;
+        } elseif (!in_array($target, $document->uiLanguageDeclined, true)) {
+            $document->uiLanguageDeclined[] = $target;
+        }
+        $document->uiLanguageOffer = null;
+    }
+
+    private function tryResolveSpokenUiOffer(
+        Intake $intake,
+        \App\Domain\IntakeDocument $document,
+        string $text,
+        bool $spokenYes,
+        bool $wasOnSummary,
+    ): bool {
+        if ($document->uiLanguageOffer === null) {
+            return false;
+        }
+        if ($wasOnSummary || $this->isAddressFollowUp($document) || $document->pendingAddressQuestionId !== null) {
+            return false;
+        }
+        $yes = $this->isUiOfferYes($text) || ($spokenYes && $this->isUiOfferYes($text));
+        $no = $this->isSpokenNo($text);
+        if (!$yes && !$no) {
+            return false;
+        }
+        $this->resolveUiLanguageOffer($document, $yes);
+
+        return true;
+    }
+
+    private function isUiOfferYes(string $text): bool
+    {
+        $normalized = $this->normalizeSpokenConfirmation($text);
+
+        return preg_match('/^(ja|yes|oui|si|sí|tak|evet|hai|sim|naam|aywa|ewa|ja graag)$/u', $normalized) === 1;
+    }
+
+    private function isSpokenNo(string $text): bool
+    {
+        $normalized = $this->normalizeSpokenConfirmation($text);
+
+        return preg_match('/^(nee|no|non|nein|hayir|hayır|nie|la|iie|nò|nao|não)$/u', $normalized) === 1;
+    }
+
     private function isSpokenYes(string $text, bool $bareYes): bool
     {
         if ($this->isAddressRejection($text)) {
@@ -1554,6 +1658,10 @@ final class IntakeService
         $ack = $document->spokenFollowUp;
         if (is_string($ack) && $ack !== '') {
             $this->addAssistantMessage($intake, $ack);
+        }
+        $offer = is_array($document->uiLanguageOffer) ? ($document->uiLanguageOffer['question'] ?? null) : null;
+        if (is_string($offer) && $offer !== '') {
+            $this->addAssistantMessage($intake, $offer);
         }
         $text = $document->nextQuestion['text'] ?? null;
         if (is_string($text) && $text !== '') {

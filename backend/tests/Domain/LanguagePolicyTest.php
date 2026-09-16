@@ -97,5 +97,31 @@ final class LanguagePolicyTest extends TestCase
         self::assertSame('de-DE', $policy->isExplicitLanguageRequest('Bitte auf Deutsch'));
         self::assertSame('tr-TR', $policy->isExplicitLanguageRequest('Türkçe konuş'));
         self::assertSame('ja-JP', $policy->isExplicitLanguageRequest('Please speak Japanese'));
+        self::assertSame('pl-PL', $policy->isExplicitLanguageRequest('Please speak Polish'));
+        self::assertSame('ar', $policy->isExplicitLanguageRequest('Speak Arabic'));
+    }
+
+    public function testClearPolishSentenceSwitches(): void
+    {
+        $policy = new LanguagePolicy();
+        $decision = $policy->detectFromResidentText(
+            'Kran w kuchni cieknie ponieważ jest zepsuty',
+            'nl-NL',
+            LanguageMode::Auto,
+        );
+        self::assertTrue($decision->changed);
+        self::assertSame('pl-PL', $decision->language);
+    }
+
+    public function testArabicScriptSwitches(): void
+    {
+        $policy = new LanguagePolicy();
+        $decision = $policy->detectFromResidentText(
+            'الحنفية في المطبخ تسرب الماء',
+            'nl-NL',
+            LanguageMode::Auto,
+        );
+        self::assertTrue($decision->changed);
+        self::assertSame('ar', $decision->language);
     }
 }

@@ -19,6 +19,8 @@ final class LedoTermsTest extends TestCase
         self::assertSame('Kitchen', LedoTerms::display('Keuken', 'en-GB'));
         self::assertSame('Küche', LedoTerms::display('Keuken', 'de-DE'));
         self::assertSame('Mutfak', LedoTerms::display('Keuken', 'tr-TR'));
+        self::assertSame('Cuisine', LedoTerms::display('Keuken', 'fr-FR'));
+        self::assertSame('Kuchnia', LedoTerms::display('Keuken', 'pl-PL'));
     }
 
     public function testLeavesFreeTextAlone(): void

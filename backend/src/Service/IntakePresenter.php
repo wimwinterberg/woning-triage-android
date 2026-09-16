@@ -71,6 +71,8 @@ final class IntakePresenter
             'next_question' => $document->nextQuestion,
             'spoken_follow_up' => $document->spokenFollowUp,
             'idle_notice' => $document->idleNotice,
+            'ui_language' => $document->uiLanguage ?? 'nl-NL',
+            'ui_language_offer' => $document->uiLanguageOffer,
             'summary' => $document->summary,
             'address' => $address,
             'report_id' => $intake->getReportId(),

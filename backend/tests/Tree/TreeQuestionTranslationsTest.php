@@ -12,8 +12,8 @@ final class TreeQuestionTranslationsTest extends TestCase
     public function testGermanLocationQuestion(): void
     {
         self::assertSame(
-            'In welchem Raum befindet sich das Problem?',
-            TreeQuestionTranslations::text('ask_location', 'de-DE'),
+            'Dans quelle pièce se trouve le problème ?',
+            TreeQuestionTranslations::text('ask_location', 'fr-FR'),
         );
     }
 

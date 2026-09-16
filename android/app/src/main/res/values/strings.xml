@@ -58,4 +58,9 @@
     <string name="open_settings">Open instellingen</string>
     <string name="retry">Opnieuw proberen</string>
     <string name="cancel">Annuleren</string>
+    <string name="change_language">Taal wijzigen</string>
+    <string name="language_picker_title">Kies een taal</string>
+    <string name="switch_ui_question">Wilt u de app-schermen in deze taal zetten?</string>
+    <string name="switch_ui_yes">Ja, zet de app om</string>
+    <string name="switch_ui_no">Nee, laat de schermen zo</string>
 </resources>

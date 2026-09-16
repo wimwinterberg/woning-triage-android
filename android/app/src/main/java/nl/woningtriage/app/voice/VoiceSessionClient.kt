@@ -3,7 +3,7 @@ package nl.woningtriage.app.voice
 interface VoiceSessionClient {
     suspend fun prepareOffer(): String
     suspend fun applyRemoteAnswer(sdpAnswer: String)
-    fun requestOpeningGreeting(openingQuestion: String) {}
+    fun requestOpeningGreeting(openingQuestion: String, language: String = "nl-NL") {}
     fun speakFollowUp(thankYou: String, nextQuestion: String, language: String) {}
     fun setOnConnectionLost(listener: (() -> Unit)?) {}
     fun setMuted(muted: Boolean)

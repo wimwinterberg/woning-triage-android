@@ -58,4 +58,9 @@
     <string name="open_settings">Ayarları aç</string>
     <string name="retry">Yeniden dene</string>
     <string name="cancel">İptal</string>
+    <string name="change_language">Dili değiştir</string>
+    <string name="language_picker_title">Bir dil seçin</string>
+    <string name="switch_ui_question">Uygulama ekranları da bu dilde olsun mu?</string>
+    <string name="switch_ui_yes">Evet, uygulamayı değiştir</string>
+    <string name="switch_ui_no">Hayır, ekranlar böyle kalsın</string>
 </resources>

@@ -27,12 +27,20 @@ final class LanguagePolicy
         if ($this->isJapanese($text)) {
             return $this->decide($currentLanguage, 'ja-JP', 'clear_japanese');
         }
+        if ($this->isArabic($text)) {
+            return $this->decide($currentLanguage, 'ar', 'clear_arabic');
+        }
 
         $scores = [
             'en-GB' => $this->score($normalized, self::englishMarkers()),
             'nl-NL' => $this->score($normalized, self::dutchMarkers()),
             'de-DE' => $this->score($normalized, self::germanMarkers()),
+            'fr-FR' => $this->score($normalized, self::frenchMarkers()),
+            'es-ES' => $this->score($normalized, self::spanishMarkers()),
             'tr-TR' => $this->scoreContains($normalized, self::turkishMarkers()) + ($this->hasTurkishLetters($text) ? 2 : 0),
+            'pl-PL' => $this->score($normalized, self::polishMarkers()) + ($this->hasPolishLetters($text) ? 2 : 0),
+            'pap' => $this->scoreContains($normalized, self::papiamentuMarkers()),
+            'zgh' => $this->scoreContains($normalized, self::tamazightMarkers()) + ($this->isTifinagh($text) ? 3 : 0),
         ];
         arsort($scores);
         $ranked = array_keys($scores);
@@ -69,13 +77,31 @@ final class LanguagePolicy
         if (preg_match('/(spreek|praat).*japans|in japanese|speak japanese|nihongo|日本語/u', $normalized)) {
             return 'ja-JP';
         }
+        if (preg_match('/(spreek|praat).*frans|en français|in french|speak french|parlez français/u', $normalized)) {
+            return 'fr-FR';
+        }
+        if (preg_match('/(spreek|praat).*spaans|en español|in spanish|speak spanish/u', $normalized)) {
+            return 'es-ES';
+        }
+        if (preg_match('/(spreek|praat).*arab|بالعربية|in arabic|speak arabic/u', $normalized)) {
+            return 'ar';
+        }
+        if (preg_match('/(spreek|praat).*pool|po polsku|in polish|speak polish/u', $normalized)) {
+            return 'pl-PL';
+        }
+        if (preg_match('/(spreek|praat).*papiament|in papiament/u', $normalized)) {
+            return 'pap';
+        }
+        if (preg_match('/(spreek|praat).*berber|tamazight|in berber/u', $normalized)) {
+            return 'zgh';
+        }
 
         return null;
     }
 
     private function decide(string $currentLanguage, string $detected, string $reason): LanguageDecision
     {
-        if (str_starts_with($currentLanguage, substr($detected, 0, 2))) {
+        if (UiLanguages::prefix($currentLanguage) === UiLanguages::prefix($detected)) {
             return new LanguageDecision($currentLanguage, false, 'already_'.$this->reasonSuffix($detected));
         }
 
@@ -84,12 +110,18 @@ final class LanguagePolicy
 
     private function reasonSuffix(string $language): string
     {
-        return match (substr($language, 0, 2)) {
+        return match (UiLanguages::prefix($language)) {
             'en' => 'english',
             'nl' => 'dutch',
             'de' => 'german',
             'tr' => 'turkish',
             'ja' => 'japanese',
+            'fr' => 'french',
+            'es' => 'spanish',
+            'ar' => 'arabic',
+            'pl' => 'polish',
+            'pap' => 'papiamentu',
+            'zgh' => 'tamazight',
             default => 'other',
         };
     }
@@ -166,6 +198,62 @@ final class LanguagePolicy
     private static function turkishMarkers(): array
     {
         return ['mutfak', 'musluk', 'bozuk', 'sızıyor', 'siziyor', 'lütfen', 'lutfen', 'çünkü', 'cunku', 'merhaba', 'evet', 'oda', 'damlıyor', 'damliyor'];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function frenchMarkers(): array
+    {
+        return ['cuisine', 'salle', 'bain', 'fuite', 'robinet', 'depuis', 'hier', 'parce', 'cassé', 'bonjour', 'appartement', 'chauffage'];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function spanishMarkers(): array
+    {
+        return ['cocina', 'grifo', 'gotea', 'baño', 'porque', 'ayer', 'roto', 'hola', 'calefacción', 'ventana', 'fuga'];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function polishMarkers(): array
+    {
+        return ['kuchnia', 'kran', 'cieknie', 'łazienka', 'lazienka', 'ponieważ', 'poniewaz', 'wczoraj', 'zepsuty', 'proszę', 'proszę', 'kaloryfer'];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function papiamentuMarkers(): array
+    {
+        return ['bon dia', 'bon tardi', 'mi tin', 'kushina', 'awa ta', 'leke', 'cas di hür', 'cas di hur'];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function tamazightMarkers(): array
+    {
+        return ['taxxamt', 'taddart', 'aman', 'imensi', 'azekka'];
+    }
+
+    private function isArabic(string $text): bool
+    {
+        return preg_match('/\p{Arabic}/u', $text) === 1
+            && grapheme_strlen(trim($text)) >= 4;
+    }
+
+    private function hasPolishLetters(string $text): bool
+    {
+        return preg_match('/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/u', $text) === 1;
+    }
+
+    private function isTifinagh(string $text): bool
+    {
+        return preg_match('/[\x{2D30}-\x{2D7F}]/u', $text) === 1;
     }
 }
 

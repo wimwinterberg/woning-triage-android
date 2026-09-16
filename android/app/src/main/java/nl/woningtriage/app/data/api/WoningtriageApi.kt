@@ -44,6 +44,13 @@ interface WoningtriageApi {
         @Body body: FieldPatchRequest,
     ): Intake
 
+    @PATCH("api/v1/intakes/{id}/language")
+    suspend fun changeLanguage(
+        @Path("id") id: String,
+        @Header("Idempotency-Key") key: String,
+        @Body body: LanguagePatchRequest,
+    ): Intake
+
     @POST("api/v1/intakes/{id}/summaries")
     suspend fun requestSummary(
         @Path("id") id: String,
@@ -100,7 +107,16 @@ interface WoningtriageApi {
     @SerialName("access_token") val accessToken: String,
     @SerialName("user_id") val userId: String,
 )
-@Serializable data class CreateIntakeRequest(@SerialName("input_mode") val inputMode: String)
+@Serializable data class CreateIntakeRequest(
+    @SerialName("input_mode") val inputMode: String,
+    val language: String? = null,
+)
+@Serializable data class LanguagePatchRequest(
+    @SerialName("expected_revision") val expectedRevision: Int,
+    val mode: String = "auto",
+    val language: String? = null,
+    @SerialName("accept_ui_offer") val acceptUiOffer: Boolean? = null,
+)
 @Serializable data class MessageRequest(
     @SerialName("expected_revision") val expectedRevision: Int,
     @SerialName("client_message_id") val clientMessageId: String,

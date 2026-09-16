@@ -42,6 +42,7 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
     private var observer: ConnectionObserver? = null
     private var eventsChannel: DataChannel? = null
     private var pendingOpeningQuestion: String? = null
+    private var pendingLanguage: String = "nl-NL"
     private var greetingSent: Boolean = false
     override var isSendingAudio: Boolean = false
         private set
@@ -95,8 +96,9 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
         trySendGreeting()
     }
 
-    override fun requestOpeningGreeting(openingQuestion: String) {
+    override fun requestOpeningGreeting(openingQuestion: String, language: String) {
         pendingOpeningQuestion = openingQuestion
+        pendingLanguage = language
         trySendGreeting()
     }
 
@@ -141,6 +143,7 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
         observer = null
         eventsChannel = null
         pendingOpeningQuestion = null
+        pendingLanguage = "nl-NL"
         greetingSent = false
         releasePlayback()
     }
@@ -152,8 +155,8 @@ class GptLiveVoiceClient(private val context: Context) : VoiceSessionClient {
         if (greetingSent || channel.state() != DataChannel.State.OPEN) {
             return
         }
-        val spoken = LiveGreeting.spoken(opening)
-        sendLiveEvent(channel, "session.instructions.append", "android_greet_instructions", LiveGreeting.instructions(spoken))
+        val spoken = LiveGreeting.spoken(opening, pendingLanguage)
+        sendLiveEvent(channel, "session.instructions.append", "android_greet_instructions", LiveGreeting.instructions(spoken, pendingLanguage))
         sendLiveEvent(channel, "session.commentary.append", "android_greet_commentary", LiveGreeting.commentary(spoken))
         greetingSent = true
     }
