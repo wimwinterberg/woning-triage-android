@@ -36,7 +36,7 @@ final class HttpGptLiveClientTest extends TestCase
 
         self::assertSame('sess_1', $result->providerSessionId);
         self::assertSame('marin', $json['session']['audio']['output']['voice'] ?? null);
-        self::assertSame(1.0, $json['session']['audio']['output']['speed'] ?? null);
+        self::assertArrayNotHasKey('speed', $json['session']['audio']['output'] ?? []);
         self::assertArrayNotHasKey('format', $json['session']['audio'] ?? []);
         self::assertSame('marin', $client->voiceName());
     }
@@ -54,8 +54,9 @@ final class HttpGptLiveClientTest extends TestCase
         $response->method('toArray')->willReturn([
             'error' => [
                 'type' => 'invalid_request_error',
-                'code' => 'model_not_found',
-                'message' => 'The model does not exist',
+                'code' => 'unknown_parameter',
+                'param' => 'session.audio.output.speed',
+                'message' => 'Unknown parameter: session.audio.output.speed',
             ],
         ]);
         $response->method('getStatusCode')->willReturn(400);

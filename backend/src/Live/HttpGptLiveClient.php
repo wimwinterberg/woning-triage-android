@@ -45,9 +45,10 @@ final class HttpGptLiveClient implements GptLiveClient
                         'model' => $this->model,
                         'instructions' => $instructions,
                         'audio' => [
+                            // WebRTC negotiates format. GPT-Live rejects audio.output.speed
+                            // on POST /v1/live/sessions (400 unknown_parameter).
                             'output' => [
                                 'voice' => $this->voiceName(),
-                                'speed' => $this->speedValue(),
                             ],
                         ],
                         'delegation' => ['type' => 'client'],
@@ -121,14 +122,18 @@ final class HttpGptLiveClient implements GptLiveClient
         $error = is_array($payload['error'] ?? null) ? $payload['error'] : [];
         $openaiType = is_string($error['type'] ?? null) ? $error['type'] : '-';
         $openaiCode = is_string($error['code'] ?? null) ? $error['code'] : '-';
+        $openaiParam = is_string($error['param'] ?? null) ? $error['param'] : '-';
+        $openaiMessage = is_string($error['message'] ?? null) ? $this->clip($error['message']) : '-';
         $exceptionClass = $exception !== null ? $exception::class : '-';
         $exceptionMessage = $exception !== null ? $this->clip($exception->getMessage()) : '-';
         OperationalLog::write(sprintf(
-            'GPT-Live session create failed reason=%s http_status=%d openai_type=%s openai_code=%s keys=%s exception=%s message=%s',
+            'GPT-Live session create failed reason=%s http_status=%d openai_type=%s openai_code=%s openai_param=%s openai_message=%s keys=%s exception=%s message=%s',
             $reason,
             $status,
             $openaiType,
             $openaiCode,
+            $openaiParam,
+            $openaiMessage,
             implode(',', array_keys($payload)),
             $exceptionClass,
             $exceptionMessage,
