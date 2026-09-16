@@ -11,10 +11,10 @@ import org.junit.Test
 class LedoMappingTest {
     @Test
     fun reportedFieldMapsToReportedLabel() {
-        assertEquals("reported", LedoField("Keuken", "reported").uiStateLabel())
-        assertEquals("unknown", LedoField(null, "unknown").uiStateLabel())
-        assertEquals("needs_review", LedoField("Kraan", "needs_review").uiStateLabel())
-        assertEquals("missing", LedoField(null, "missing").uiStateLabel())
+        assertEquals("reported", LedoField(value = "Keuken", state = "reported").uiStateLabel())
+        assertEquals("unknown", LedoField(state = "unknown").uiStateLabel())
+        assertEquals("needs_review", LedoField(value = "Kraan", state = "needs_review").uiStateLabel())
+        assertEquals("missing", LedoField(state = "missing").uiStateLabel())
     }
 }
 
