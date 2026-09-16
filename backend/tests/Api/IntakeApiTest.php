@@ -29,6 +29,33 @@ final class IntakeApiTest extends WebTestCase
         \App\Address\FakeAddressProvider::$unavailable = false;
     }
 
+    public function testOpenSessionIssuesTokenWithoutActivationCode(): void
+    {
+        $this->client->jsonRequest('POST', '/api/v1/auth/session', ['client' => 'android'], [
+            'HTTP_IDEMPOTENCY_KEY' => 'session-open-1',
+        ]);
+        self::assertResponseIsSuccessful();
+        $body = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, JSON_THROW_ON_ERROR);
+        self::assertNotEmpty($body['access_token']);
+        self::assertNotEmpty($body['user_id']);
+
+        $intake = $this->postJson('/api/v1/intakes', $body['access_token'], [
+            'input_mode' => 'text',
+        ], 'create-from-session', 201);
+        self::assertSame('collecting', $intake['status']);
+    }
+
+    public function testOpenSessionIsIdempotent(): void
+    {
+        $headers = ['HTTP_IDEMPOTENCY_KEY' => 'session-same'];
+        $this->client->jsonRequest('POST', '/api/v1/auth/session', ['client' => 'android'], $headers);
+        $first = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, JSON_THROW_ON_ERROR);
+        $this->client->jsonRequest('POST', '/api/v1/auth/session', ['client' => 'android'], $headers);
+        $second = json_decode($this->client->getResponse()->getContent() ?: '[]', true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame($first['access_token'], $second['access_token']);
+        self::assertSame($first['user_id'], $second['user_id']);
+    }
+
     public function testHealthIsPublic(): void
     {
         foreach (['/health', '/api/v1/health', '/'] as $path) {

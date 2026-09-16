@@ -53,6 +53,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -61,6 +62,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.painterResource
@@ -79,7 +81,6 @@ fun WoningtriageRoot(viewModel: AppViewModel) {
     AppLocale(state.uiLocale) {
         Box {
             when (state.screen) {
-                Screen.Activation -> ActivationScreen(state, viewModel)
                 Screen.Start -> StartScreen(state, viewModel)
                 Screen.Conversation -> ConversationScreen(state, viewModel)
                 Screen.Address -> AddressScreen(state, viewModel)
@@ -112,14 +113,19 @@ private fun AppLocale(tag: String, content: @Composable () -> Unit) {
         config.setLocales(LocaleList(locale))
         context.createConfigurationContext(config)
     }
+    SideEffect {
+        java.util.Locale.setDefault(locale)
+    }
     // createConfigurationContext() is not the Activity. rememberLauncherForActivityResult
     // looks up LocalActivityResultRegistryOwner from LocalContext, so keep the Activity owner.
+    // Compose 1.7 stringResource() reads LocalResources, not only LocalContext.
     val layoutDirection = if (UiLocale.isRtl(tag)) LayoutDirection.Rtl else LayoutDirection.Ltr
     val registryOwner = LocalActivityResultRegistryOwner.current
     if (registryOwner != null) {
         CompositionLocalProvider(
             LocalContext provides wrapped,
             LocalConfiguration provides wrapped.resources.configuration,
+            LocalResources provides wrapped.resources,
             LocalLayoutDirection provides layoutDirection,
             LocalActivityResultRegistryOwner provides registryOwner,
             content = content,
@@ -128,30 +134,9 @@ private fun AppLocale(tag: String, content: @Composable () -> Unit) {
         CompositionLocalProvider(
             LocalContext provides wrapped,
             LocalConfiguration provides wrapped.resources.configuration,
+            LocalResources provides wrapped.resources,
             LocalLayoutDirection provides layoutDirection,
             content = content,
-        )
-    }
-}
-
-@Composable
-private fun ActivationScreen(state: AppUiState, viewModel: AppViewModel) {
-    PaperScaffold {
-        BrandMark()
-        Text(stringResource(R.string.activation_title), style = MaterialTheme.typography.headlineLarge)
-        Text(stringResource(R.string.activation_explain), style = MaterialTheme.typography.bodyLarge)
-        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        OutlinedTextField(
-            state.activationCode,
-            viewModel::onCode,
-            label = { Text(stringResource(R.string.activation_code)) },
-            modifier = Modifier.fillMaxWidth(),
-            colors = paperFieldColors(),
-        )
-        PrimaryAction(
-            text = stringResource(R.string.activate),
-            onClick = viewModel::activate,
-            enabled = !state.busy && state.activationCode.isNotBlank(),
         )
     }
 }
@@ -690,15 +675,18 @@ private fun LanguagePickerDialog(current: String, onSelect: (String) -> Unit, on
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 SupportedLanguages.all.forEach { language ->
                     val selected = UiLocale.fromTag(current) == language.tag
-                    Text(
-                        language.nativeName + "  ·  " + language.nameNl,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(language.tag) }
-                            .padding(vertical = 10.dp),
-                        style = if (selected) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
-                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
-                    )
+                    TextButton(
+                        onClick = { onSelect(language.tag) },
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            language.nativeName + "  ·  " + language.nameNl,
+                            modifier = Modifier.fillMaxWidth(),
+                            style = if (selected) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+                        )
+                    }
                 }
             }
         },

@@ -10,7 +10,7 @@ Vastgelegd tijdens implementatie. Producteisen blijven in de specs.
 
 ## Authenticatie (OPEN-03)
 
-Pilottoegang via een eenmalige activatiecode (`php bin/console woningtriage:create-user`). De app wisselt die in voor een opaque bearer-token, opgeslagen in EncryptedSharedPreferences. Geen gedeeld geheim in de APK.
+Pilottoegang zonder activatiecode. De app opent bij de eerste start `POST /api/v1/auth/session` en bewaart het opaque bearer-token in EncryptedSharedPreferences. Geen gedeeld geheim in de APK.
 
 ## GPT-Live
 

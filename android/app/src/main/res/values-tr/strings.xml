@@ -9,10 +9,6 @@
     <string name="prefer_typing">Yazmayı tercih ederim</string>
     <string name="resume_intake">Kayıttan devam</string>
     <string name="new_intake">Yeni kayıt</string>
-    <string name="activation_title">Erişim</string>
-    <string name="activation_explain">Yöneticinin oluşturduğu tek kullanımlık kodu girin. Uygulamada gizli bir anahtar yoktur.</string>
-    <string name="activation_code">Etkinleştirme kodu</string>
-    <string name="activate">Etkinleştir</string>
     <string name="what_we_know">Bildiklerimiz</string>
     <string name="location">Oda</string>
     <string name="element">Parça</string>

@@ -12,6 +12,21 @@ paths:
       responses:
         "200":
           description: OK
+  /auth/session:
+    post:
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                client: { type: string }
+      responses:
+        "200":
+          description: Bearer token for a new resident session
   /auth/activation:
     post:
       security: []
@@ -28,7 +43,7 @@ paths:
                 code: { type: string }
       responses:
         "200":
-          description: Bearer token issued once
+          description: Bearer token issued once (legacy; the app uses /auth/session)
   /intakes:
     post:
       parameters:

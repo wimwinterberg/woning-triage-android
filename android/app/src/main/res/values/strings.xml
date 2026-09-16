@@ -9,10 +9,6 @@
     <string name="prefer_typing">Liever typen</string>
     <string name="resume_intake">Intake hervatten</string>
     <string name="new_intake">Nieuwe intake</string>
-    <string name="activation_title">Toegang</string>
-    <string name="activation_explain">Voer de eenmalige activatiecode in die de beheerder heeft aangemaakt. Er staat geen geheim in de app.</string>
-    <string name="activation_code">Activatcode</string>
-    <string name="activate">Activeren</string>
     <string name="what_we_know">Wat we al weten</string>
     <string name="location">Ruimte</string>
     <string name="element">Element</string>

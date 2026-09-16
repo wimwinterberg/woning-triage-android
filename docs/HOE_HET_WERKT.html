@@ -598,7 +598,7 @@ flowchart TD
 <section id="android">
   <h2>11. Android</h2>
   <ul>
-    <li>Activatiecode → Bearer-token (<code>POST /api/v1/auth/activation</code>).</li>
+    <li>Eerste start: <code>POST /api/v1/auth/session</code> → Bearer-token. Geen activatiecode.</li>
     <li>Start intake → eventueel voice-session met SDP-offer.</li>
     <li>Fake-SDP van de backend wordt <em>niet</em> op WebRTC gezet (voorkomt crash).</li>
     <li><code>watchIntake</code> pollt 700&nbsp;ms; SSE bestaat op de API maar de app gebruikt het niet.</li>

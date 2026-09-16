@@ -10,10 +10,6 @@ en casa</string>
     <string name="prefer_typing">Prefiero escribir</string>
     <string name="resume_intake">Reanudar la entrevista</string>
     <string name="new_intake">Nueva entrevista</string>
-    <string name="activation_title">Acceso</string>
-    <string name="activation_explain">Introduzca el código de activación único creado por el administrador. La aplicación no contiene un secreto compartido.</string>
-    <string name="activation_code">Código de activación</string>
-    <string name="activate">Activar</string>
     <string name="what_we_know">Lo que ya sabemos</string>
     <string name="location">Estancia</string>
     <string name="element">Elemento</string>

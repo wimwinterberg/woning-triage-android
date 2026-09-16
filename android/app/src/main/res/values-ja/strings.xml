@@ -9,10 +9,6 @@
     <string name="prefer_typing">入力する</string>
     <string name="resume_intake">続きから</string>
     <string name="new_intake">新しい受付</string>
-    <string name="activation_title">アクセス</string>
-    <string name="activation_explain">管理者が作った一度きりのコードを入力してください。アプリに秘密はありません。</string>
-    <string name="activation_code">有効化コード</string>
-    <string name="activate">有効化</string>
     <string name="what_we_know">把握していること</string>
     <string name="location">部屋</string>
     <string name="element">部位</string>

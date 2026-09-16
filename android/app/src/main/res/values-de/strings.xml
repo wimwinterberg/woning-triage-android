@@ -9,10 +9,6 @@
     <string name="prefer_typing">Lieber tippen</string>
     <string name="resume_intake">Intake fortsetzen</string>
     <string name="new_intake">Neuer Intake</string>
-    <string name="activation_title">Zugang</string>
-    <string name="activation_explain">Geben Sie den einmaligen Aktivierungscode ein. Die App enthält kein Geheimnis.</string>
-    <string name="activation_code">Aktivierungscode</string>
-    <string name="activate">Aktivieren</string>
     <string name="what_we_know">Was wir schon wissen</string>
     <string name="location">Raum</string>
     <string name="element">Element</string>

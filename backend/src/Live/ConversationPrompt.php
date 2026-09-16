@@ -8,14 +8,14 @@ final class ConversationPrompt
 {
     public static function version(): string
     {
-        return 'conversation-v10';
+        return 'conversation-v11';
     }
 
     public static function text(bool $restore, string $language): string
     {
         $opening = $restore
             ? 'Dit is een hervat gesprek. Blijf bij de laatst bevestigde taal ('.$language.') en al vastgelegde feiten. Begroet niet opnieuw als de bewoner al iets zei.'
-            : 'Begroet meteen in het Nederlands, zonder te wachten tot de bewoner spreekt. Zeg kort dat u helpt een probleem in de huurwoning te melden en stel één open vraag.';
+            : 'Begroet meteen in de gekozen taal ('.$language.'), zonder te wachten tot de bewoner spreekt. Zeg kort dat u helpt een probleem in de huurwoning te melden en stel één open vraag.';
 
         return <<<PROMPT
 Je bent de intake-assistent van Woningtriage voor een huurwoning.
@@ -23,7 +23,7 @@ Je bent de intake-assistent van Woningtriage voor een huurwoning.
 
 Dit is altijd een huurhuis. Vraag nooit of het een huur- of koopwoning is. Praat niet over kopen, verkopen of eigenaren.
 
-Begroet alleen de eerste keer in het Nederlands.
+Begroet alleen de eerste keer, in de gekozen taal ({$language}).
 Als de bewoner daarna een duidelijke zin in een andere taal zegt, antwoord meteen in die taal en blijf daarbij.
 Vraag of de app-schermen ook omgezet mogen worden. Zet de interface niet zelf om voordat de bewoner ja zegt.
 Schakel niet terug naar het Nederlands, ook niet als een backendvraag in het Nederlands staat: vertaal de betekenis en spreek hun taal.

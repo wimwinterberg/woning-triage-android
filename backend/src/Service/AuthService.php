@@ -39,6 +39,19 @@ final class AuthService
     }
 
     /**
+     * Open a resident session without an activation code.
+     *
+     * @return array{access_token: string, user_id: string}
+     */
+    public function openSession(string $label = 'resident'): array
+    {
+        $user = new User(IdGenerator::prefixed('user'), $label);
+        $this->entityManager->persist($user);
+
+        return $this->issueToken($user);
+    }
+
+    /**
      * @return array{access_token: string, user_id: string}
      */
     public function activate(string $code): array

@@ -36,13 +36,6 @@ docker compose up --build
 
 De API luistert op http://127.0.0.1:8000 (`GET /health` moet `{"status":"ok"}` teruggeven).
 
-In een tweede terminal:
-
-```bash
-cd backend
-docker compose exec api php bin/console woningtriage:create-user --label=pilot
-```
-
 Spraak (GPT-Live) vereist `OPENAI_API_KEY` in `backend/.env` (Compose leest dat bestand; `.env.local` alleen is niet genoeg). Zonder key blijft **typen** werken. De worker blijft idle en logt geen `Skipping voice_…`. De app past geen fake-SDP toe, zodat WebRTC niet crasht op m-line-volgorde.
 
 Adreslookup gebruikt de We Create Solutions Address API. Zet `WCS_ADDRESS_API_KEY` in hetzelfde `backend/.env`. Zonder key geeft een echte postcode `503` (niet een nepstraat). CI gebruikt de fake provider. In de app kan de bewoner **Gebruik mijn locatie** kiezen; bij meerdere treffers moet zelf het juiste adres worden aangetikt.
@@ -117,7 +110,7 @@ cd android
 ./gradlew assembleDebug -PBACKEND_URL=https://JOUW-ID.ngrok-free.app/
 ```
 
-Installeer `android/app/build/outputs/apk/debug/app-debug.apk` op de telefoon. Activatiecode: `docker compose exec api php bin/console woningtriage:create-user --label=pilot`.
+Installeer `android/app/build/outputs/apk/debug/app-debug.apk` op de telefoon. De app opent zelf een sessie; er is geen activatiecode.
 
 De debug-app stuurt `ngrok-skip-browser-warning` mee, anders antwoordt het gratis ngrok-plan met een HTML-waarschuwing in plaats van JSON. De tunnel is publiek zolang ngrok draait; deel de URL niet.
 
@@ -133,7 +126,6 @@ php bin/console doctrine:migrations:migrate --no-interaction
 php bin/console woningtriage:import-classification \
   --file=fixtures/classification/demo-catalog.json --version=demo-ledo-1
 php bin/console woningtriage:validate-tree
-php bin/console woningtriage:create-user --label=pilot
 php -S 127.0.0.1:8000 -t public
 ```
 
@@ -178,7 +170,7 @@ Standaard backend-URL is `http://10.0.2.2:8000/` (emulator). Override:
 ./gradlew assembleDebug -PBACKEND_URL=https://jouw-server.example/
 ```
 
-Eerste start: voer de activatiecode in. Kies **Probleem melden** (spraak, microfoontoestemming) of **Liever typen**.
+Eerste start: kies **Probleem melden** (spraak, microfoontoestemming) of **Liever typen**. Er is geen activatiecode.
 
 ## DigitalOcean App Platform
 

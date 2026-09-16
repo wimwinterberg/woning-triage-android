@@ -10,10 +10,6 @@ w domu</string>
     <string name="prefer_typing">Wolę pisać</string>
     <string name="resume_intake">Wznów wywiad</string>
     <string name="new_intake">Nowy wywiad</string>
-    <string name="activation_title">Dostęp</string>
-    <string name="activation_explain">Wpisz jednorazowy kod aktywacyjny utworzony przez administratora. Aplikacja nie zawiera wspólnego sekretu.</string>
-    <string name="activation_code">Kod aktywacyjny</string>
-    <string name="activate">Aktywuj</string>
     <string name="what_we_know">Co już wiemy</string>
     <string name="location">Pomieszczenie</string>
     <string name="element">Element</string>

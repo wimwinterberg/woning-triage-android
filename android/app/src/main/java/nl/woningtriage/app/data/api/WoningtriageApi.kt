@@ -15,11 +15,11 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 
 interface WoningtriageApi {
-    @POST("api/v1/auth/activation")
-    suspend fun activate(
+    @POST("api/v1/auth/session")
+    suspend fun openSession(
         @Header("Idempotency-Key") key: String,
-        @Body body: ActivationRequest,
-    ): ActivationResponse
+        @Body body: SessionRequest,
+    ): TokenResponse
 
     @POST("api/v1/intakes")
     suspend fun createIntake(
@@ -102,8 +102,8 @@ interface WoningtriageApi {
     ): VoiceSession
 }
 
-@Serializable data class ActivationRequest(val code: String)
-@Serializable data class ActivationResponse(
+@Serializable data class SessionRequest(val client: String = "android")
+@Serializable data class TokenResponse(
     @SerialName("access_token") val accessToken: String,
     @SerialName("user_id") val userId: String,
 )

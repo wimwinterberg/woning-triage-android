@@ -13,6 +13,7 @@ import okhttp3.OkHttpClient
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 class TokenStore(context: Context) {
@@ -41,6 +42,16 @@ class TokenStore(context: Context) {
         set(value) {
             prefs.edit().putString("active_intake_id", value).apply()
         }
+
+    fun sessionIdempotencyKey(): String {
+        val existing = prefs.getString("session_idempotency_key", null)
+        if (existing != null) {
+            return existing
+        }
+        val created = UUID.randomUUID().toString()
+        prefs.edit().putString("session_idempotency_key", created).apply()
+        return created
+    }
 }
 
 fun createApi(tokenStore: TokenStore): WoningtriageApi {

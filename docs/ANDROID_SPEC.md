@@ -10,7 +10,7 @@ De Android-app biedt de bewoner een rustige manier om een probleem in huis te me
 
 Voorgestelde basis: Kotlin, Jetpack Compose, Material 3, ViewModel, coroutines en StateFlow. De exacte stabiele dependencyversies, compile-/target-SDK en WebRTC-library worden bij de technische proef vastgesteld en daarna vastgelegd in een version catalog en buildconfiguratie. Voorstel minimum: Android 10; nog te bevestigen.
 
-De app is zelfstandig. Er is geen afhankelijkheid van Keyplan, Teamwissels of een bestaande mobiele app. Een login- of activatiescherm is afhankelijk van OPEN-03; onderstaande schermen veronderstellen geldige backendtoegang.
+De app is zelfstandig. Er is geen afhankelijkheid van Keyplan, Teamwissels of een bestaande mobiele app. Toegang gaat via `POST /api/v1/auth/session`; onderstaande schermen veronderstellen geldige backendtoegang.
 
 ## 2. Navigatie en schermen
 

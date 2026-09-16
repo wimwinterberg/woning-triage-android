@@ -10,10 +10,6 @@
     <string name="prefer_typing">Je préfère taper</string>
     <string name="resume_intake">Reprendre l’intake</string>
     <string name="new_intake">Nouvel intake</string>
-    <string name="activation_title">Accès</string>
-    <string name="activation_explain">Saisissez le code d’activation unique créé par l’administrateur. L’application ne contient pas de secret partagé.</string>
-    <string name="activation_code">Code d’activation</string>
-    <string name="activate">Activer</string>
     <string name="what_we_know">Ce que nous savons déjà</string>
     <string name="location">Pièce</string>
     <string name="element">Élément</string>

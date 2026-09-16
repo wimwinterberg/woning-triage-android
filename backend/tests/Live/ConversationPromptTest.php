@@ -12,8 +12,8 @@ final class ConversationPromptTest extends TestCase
     public function testNewSessionGreetsImmediatelyAndStaysOnRentalHomes(): void
     {
         $text = ConversationPrompt::text(false, 'nl-NL');
-        self::assertSame('conversation-v10', ConversationPrompt::version());
-        self::assertStringContainsString('Begroet meteen', $text);
+        self::assertSame('conversation-v11', ConversationPrompt::version());
+        self::assertStringContainsString('Begroet meteen in de gekozen taal (nl-NL)', $text);
         self::assertStringContainsString('Schakel niet terug naar het Nederlands', $text);
         self::assertStringContainsString('app-schermen', $text);
         self::assertStringContainsString('voordat de bewoner ja zegt', $text);
@@ -32,5 +32,13 @@ final class ConversationPromptTest extends TestCase
         self::assertStringContainsString('gebouwtype is altijd een woning', $text);
         self::assertStringContainsString('één stem', $text);
         self::assertStringNotContainsString('koopwoning of huurwoning', $text);
+        self::assertStringNotContainsString('Begroet meteen in het Nederlands', $text);
+    }
+
+    public function testNewSessionGreetsInChosenLanguage(): void
+    {
+        $text = ConversationPrompt::text(false, 'en-GB');
+        self::assertStringContainsString('Begroet meteen in de gekozen taal (en-GB)', $text);
+        self::assertStringContainsString('Begroet alleen de eerste keer, in de gekozen taal (en-GB)', $text);
     }
 }

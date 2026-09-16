@@ -21,6 +21,21 @@ final class AuthController extends AbstractController
     ) {
     }
 
+    #[Route('/api/v1/auth/session', methods: ['POST'])]
+    public function session(Request $request): JsonResponse
+    {
+        $body = JsonBody::parse($request);
+        $key = $this->idempotency->requireKey($request);
+        $existing = $this->idempotency->find('public', 'none', 'session', $key, $body);
+        if ($existing !== null) {
+            return new JsonResponse($existing->getResponseBody(), $existing->getStatusCode());
+        }
+        $result = $this->authService->openSession();
+        $this->idempotency->store('public', 'none', 'session', $key, $body, 200, $result);
+
+        return new JsonResponse($result);
+    }
+
     #[Route('/api/v1/auth/activation', methods: ['POST'])]
     public function activate(Request $request): JsonResponse
     {

@@ -44,7 +44,6 @@ data class AppUiState(
     val micMuted: Boolean = false,
     val voiceConnected: Boolean = false,
     val connectionLabel: String = "disconnected",
-    val activationCode: String = "",
     val postcode: String = "",
     val houseNumber: String = "",
     val addition: String = "",
@@ -59,7 +58,7 @@ data class AppUiState(
     val hasStoredIntake: Boolean = false,
 )
 
-enum class Screen { Activation, Start, Conversation, Address, Review, Completed, ReviewRequired, FieldEdit }
+enum class Screen { Start, Conversation, Address, Review, Completed, ReviewRequired, FieldEdit }
 
 class AppViewModel(
     private val api: WoningtriageApi,
@@ -69,7 +68,7 @@ class AppViewModel(
     private val _state = MutableStateFlow(
         AppUiState(
             hasToken = tokens.accessToken != null,
-            screen = if (tokens.accessToken == null) Screen.Activation else Screen.Start,
+            screen = Screen.Start,
             uiLocale = tokens.uiLocale,
             hasStoredIntake = tokens.activeIntakeId != null,
         ),
@@ -78,20 +77,33 @@ class AppViewModel(
     private var confirmKey: String? = null
     private var watchJob: Job? = null
 
-    fun onCode(value: String) { _state.value = _state.value.copy(activationCode = value) }
+    init {
+        if (tokens.accessToken == null) {
+            ensureSession()
+        }
+    }
+
     fun onDraft(value: String) { _state.value = _state.value.copy(draft = value) }
     fun onPostcode(value: String) { _state.value = _state.value.copy(postcode = value) }
     fun onHouseNumber(value: String) { _state.value = _state.value.copy(houseNumber = value) }
     fun onAddition(value: String) { _state.value = _state.value.copy(addition = value) }
     fun onEditValue(value: String) { _state.value = _state.value.copy(editingValue = value) }
 
-    fun activate() = run("activation") {
-        val result = api.activate(UUID.randomUUID().toString(), nl.woningtriage.app.data.api.ActivationRequest(_state.value.activationCode.trim()))
+    fun ensureSession() = run("session") {
+        openSessionIfNeeded()
+    }
+
+    private suspend fun openSessionIfNeeded() {
+        if (tokens.accessToken != null) {
+            return
+        }
+        val result = api.openSession(tokens.sessionIdempotencyKey(), nl.woningtriage.app.data.api.SessionRequest())
         tokens.accessToken = result.accessToken
         _state.value = _state.value.copy(hasToken = true, screen = Screen.Start, error = null)
     }
 
     fun startIntake(voiceMode: Boolean) = run("start") {
+        openSessionIfNeeded()
         stopVoiceInternal()
         if (voiceMode) {
             coroutineScope {
@@ -335,7 +347,13 @@ class AppViewModel(
     fun stopConversation() = run("stop") {
         watchJob?.cancel()
         stopVoiceInternal()
-        _state.value = _state.value.copy(voiceConnected = false, connectionLabel = "disconnected", screen = Screen.Start)
+        _state.value = _state.value.copy(
+            voiceConnected = false,
+            connectionLabel = "disconnected",
+            screen = Screen.Start,
+            intake = null,
+            transcript = emptyList(),
+        )
     }
 
     fun goStart() {
@@ -360,7 +378,10 @@ class AppViewModel(
         val normalized = UiLocale.fromTag(tag)
         tokens.uiLocale = normalized
         _state.value = _state.value.copy(uiLocale = normalized, showLanguagePicker = false)
-        val intake = _state.value.intake ?: return@run
+        val intake = _state.value.intake
+        if (intake == null || _state.value.screen == Screen.Start) {
+            return@run
+        }
         val updated = api.changeLanguage(
             intake.id,
             UUID.randomUUID().toString(),
@@ -510,7 +531,7 @@ class AppViewModel(
                 _state.value.busy -> "processing"
                 else -> _state.value.connectionLabel
             },
-            uiLocale = intake.uiLanguage ?: _state.value.uiLocale,
+            uiLocale = if (_state.value.screen == Screen.Start) tokens.uiLocale else (intake.uiLanguage ?: _state.value.uiLocale),
             uiOffer = intake.uiLanguageOffer,
         )
         if (screen == Screen.Completed || screen == Screen.ReviewRequired) {

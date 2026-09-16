@@ -30,13 +30,7 @@ Android zit niet in deze deploy. Bouw de APK lokaal met `-PBACKEND_URL=https://<
    - `WCS_ADDRESS_API_KEY` — We Create Solutions Address API (postcode-lookup). Zonder key geven adresopzoekingen `503`.
    - `OPENAI_API_KEY` — GPT-Live. Zonder key blijft tekstintake werken; de worker blijft idle.
 
-6. Maak een activatiecode via **App Platform → jouw app → Console** (component `api`):
-
-   ```bash
-   php bin/console woningtriage:create-user --label=pilot
-   ```
-
-   De code verschijnt één keer. Bewaar hem; hij wordt niet in plaintext opgeslagen.
+6. De app maakt zelf een sessie (`POST /api/v1/auth/session`). Er is geen activatiecode nodig.
 
 ## Verplichte runtime-variabelen
 
@@ -73,4 +67,4 @@ cd android
 ./gradlew assembleDebug -PBACKEND_URL=https://woningtriage-<hash>.ondigitalocean.app/
 ```
 
-Gebruik HTTPS, inclusief trailing slash. Eerste start: activatiecode uit `woningtriage:create-user`.
+Gebruik HTTPS, inclusief trailing slash. Eerste start: de app opent zelf een sessie, zonder activatiecode.

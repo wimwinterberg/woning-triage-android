@@ -10,10 +10,6 @@
     <string name="prefer_typing">أفضل الكتابة</string>
     <string name="resume_intake">متابعة المقابلة</string>
     <string name="new_intake">مقابلة جديدة</string>
-    <string name="activation_title">الوصول</string>
-    <string name="activation_explain">أدخل رمز التفعيل لمرة واحدة الذي أنشأه المسؤول. لا يحتوي التطبيق على سر مشترك.</string>
-    <string name="activation_code">رمز التفعيل</string>
-    <string name="activate">تفعيل</string>
     <string name="what_we_know">ما نعرفه حتى الآن</string>
     <string name="location">الغرفة</string>
     <string name="element">العنصر</string>

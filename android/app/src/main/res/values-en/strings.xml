@@ -9,10 +9,6 @@
     <string name="prefer_typing">I prefer to type</string>
     <string name="resume_intake">Resume intake</string>
     <string name="new_intake">New intake</string>
-    <string name="activation_title">Access</string>
-    <string name="activation_explain">Enter the one-time activation code created by the administrator. The app does not contain a shared secret.</string>
-    <string name="activation_code">Activation code</string>
-    <string name="activate">Activate</string>
     <string name="what_we_know">What we already know</string>
     <string name="location">Room</string>
     <string name="element">Element</string>

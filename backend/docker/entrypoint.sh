@@ -61,7 +61,7 @@ php bin/console cache:warmup --no-interaction
 if [ "${SKIP_RELEASE:-0}" != "1" ]; then
     php bin/console doctrine:database:create --if-not-exists --no-interaction || true
     php bin/console woningtriage:release --no-interaction
-    echo "Create a pilot user with: docker compose exec api php bin/console woningtriage:create-user --label=pilot"
+    echo "The Android app opens a session automatically (POST /api/v1/auth/session)."
 fi
 
 exec "$@"
