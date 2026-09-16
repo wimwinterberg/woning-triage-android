@@ -72,4 +72,27 @@ final class IntakeDocumentTest extends TestCase
         self::assertNull($document->address['house_number']);
         self::assertFalse($document->isAddressVerified());
     }
+
+    public function testClearUnverifiedAddressDropsLookupAndCandidates(): void
+    {
+        $document = IntakeDocument::initial(['id' => 'address_confirm_demo', 'target' => 'address']);
+        $document->recordAddressInput([
+            'postcode' => '3573 SJ',
+            'house_number' => 207,
+            'addition' => null,
+            'lookup_id' => 'lookup_demo',
+            'candidates' => [['candidate_id' => 'c1', 'display_address' => 'Oldenburgerstraat 207']],
+            'lookup_at' => '2026-09-16T00:00:00+00:00',
+            'provider' => 'configured',
+        ]);
+        $document->pendingAddressQuestionId = 'address_confirm_c1';
+        $revision = (int) $document->address['address_revision'];
+        $document->clearUnverifiedAddress();
+        self::assertSame('missing', $document->address['verification_status']);
+        self::assertNull($document->address['postcode']);
+        self::assertNull($document->address['house_number']);
+        self::assertSame([], $document->address['candidates']);
+        self::assertNull($document->pendingAddressQuestionId);
+        self::assertSame($revision + 1, $document->address['address_revision']);
+    }
 }

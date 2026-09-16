@@ -257,6 +257,14 @@ final class DutchPostcodeParser
                 return [$code, 3];
             }
         }
+        // "acht zeven drie twintig" → 8732 (STT often says twintig for twee).
+        if ($n >= 4 && self::isUnit($nums[0]) && self::isUnit($nums[1]) && self::isUnit($nums[2]) && self::isTensValue($nums[3])) {
+            $digits = $nums[0].$nums[1].$nums[2].sprintf('%02d', $nums[3]);
+            $code = substr($digits, 0, 4);
+            if (preg_match('/^[1-9][0-9]{3}$/', $code) === 1) {
+                return [$code, 4];
+            }
+        }
 
         return null;
     }

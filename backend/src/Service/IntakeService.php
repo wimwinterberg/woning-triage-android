@@ -167,6 +167,9 @@ final class IntakeService
                     'unique_claim' => true,
                 ];
             }
+            if ($this->shouldRestartAddress($document, $text, $hint)) {
+                $this->restartUnverifiedAddress($intake, $document);
+            }
             if ($hint !== null) {
                 $this->applyAddressHint($intake, $document, $hint);
             }
@@ -947,6 +950,63 @@ final class IntakeService
         $folded = preg_replace('/[^a-z]/', '', $folded) ?? $folded;
 
         return preg_replace('/(straat|laan|weg|plein|gracht|kade|singel|hof|dreef|pad|steeg|dijk|baan)$/', '', $folded) ?? $folded;
+    }
+
+    /**
+     * @param array{postcode: ?string, house_number: ?int, addition: ?string, street?: ?string, unique_claim?: bool}|null $hint
+     */
+    private function shouldRestartAddress(\App\Domain\IntakeDocument $document, string $text, ?array $hint): bool
+    {
+        if ($document->isAddressVerified() || !$this->isAddressFollowUp($document)) {
+            return false;
+        }
+        if ($this->isAddressRejection($text)) {
+            return true;
+        }
+        $incoming = is_string($hint['postcode'] ?? null) ? trim((string) $hint['postcode']) : '';
+        $existing = is_string($document->address['postcode'] ?? null) ? trim((string) $document->address['postcode']) : '';
+        if ($incoming === '' || $existing === '') {
+            return false;
+        }
+
+        return !AddressNormalizer::samePostcode($incoming, $existing);
+    }
+
+    private function isAddressFollowUp(\App\Domain\IntakeDocument $document): bool
+    {
+        $id = (string) ($document->nextQuestion['id'] ?? '');
+        if ($id === '') {
+            return false;
+        }
+
+        return ($document->nextQuestion['target'] ?? null) === 'address'
+            || str_starts_with($id, 'address_');
+    }
+
+    private function isAddressRejection(string $text): bool
+    {
+        $normalized = mb_strtolower(trim($text));
+        if ($normalized === '') {
+            return false;
+        }
+        if (preg_match('/^(nee|neen|no)\b/u', $normalized) === 1) {
+            return true;
+        }
+
+        return preg_match(
+            '/verkeerd(e)?\s+(postcode|adres|huisnummer)|niet (mijn|het) adres|dat (is|klopt) niet|klopt niet|opnieuw beginnen|andere postcode|ander adres|niet de juiste/u',
+            $normalized,
+        ) === 1;
+    }
+
+    private function restartUnverifiedAddress(Intake $intake, \App\Domain\IntakeDocument $document): void
+    {
+        $document->clearUnverifiedAddress();
+        $this->addressLookupLogger->log('reset', [
+            'intake_id' => $intake->getId(),
+            'provider' => $this->addressProvider::class,
+            'reason' => 'resident_correction',
+        ]);
     }
 
     private function mergePostcode(?string $incoming, mixed $existing): ?string

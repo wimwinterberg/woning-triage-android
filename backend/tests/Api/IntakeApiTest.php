@@ -367,6 +367,66 @@ final class IntakeApiTest extends WebTestCase
         self::assertSame('address_ask_house_number', $intake['next_question']['id']);
     }
 
+    public function testSpokenAddressRejectionAsksForPostcodeAgain(): void
+    {
+        $intake = $this->spokenAddressConfirm($this->tokenA);
+        self::assertStringStartsWith('address_confirm_', $intake['next_question']['id']);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'addr-no',
+            'text' => 'Nee, ik heb de verkeerde postcode opgegeven. Ik wil even opnieuw beginnen met mijn postcode',
+        ], 'addr-no-1', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('ask_address', $intake['next_question']['id']);
+        self::assertSame('missing', $intake['address']['verification_status']);
+        self::assertNull($intake['address']['postcode']);
+        self::assertSame([], $intake['address']['candidates']);
+    }
+
+    public function testSpokenAddressCorrectionLooksUpTheNewPostcode(): void
+    {
+        $intake = $this->spokenAddressConfirm($this->tokenA);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'addr-fix',
+            'text' => 'Nee. De postcode is een twee drie vier anton bernard huisnummer twaalf',
+        ], 'addr-fix-1', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('1234 AB', $intake['address']['postcode']);
+        self::assertSame(12, $intake['address']['house_number']);
+        self::assertSame('unverified', $intake['address']['verification_status']);
+        self::assertStringStartsWith('address_confirm_', $intake['next_question']['id']);
+        self::assertStringContainsString('Voorbeeldstraat 12', $intake['next_question']['text']);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function spokenAddressConfirm(string $token): array
+    {
+        $intake = $this->createIntake($token);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $token, [
+            'expected_revision' => 0,
+            'client_message_id' => 'ledo-confirm',
+            'text' => 'De keukenkraan druppelt sinds gisteren.',
+        ], 'confirm-ledo', 202);
+        $intake = $this->getIntake($intake['id'], $token);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $token, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'cause-confirm',
+            'text' => 'Oorzaak onbekend',
+        ], 'confirm-cause', 202);
+        $intake = $this->getIntake($intake['id'], $token);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $token, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'pc-confirm',
+            'text' => '1234 anton bernard huisnummer 12',
+        ], 'confirm-pc', 202);
+
+        return $this->getIntake($intake['id'], $token);
+    }
+
     /**
      * @return array<string, mixed>
      */

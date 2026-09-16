@@ -121,4 +121,11 @@ final class DutchPostcodeParserTest extends TestCase
         self::assertSame('Oldeburgstraat', $parsed['street']);
         self::assertTrue(DutchPostcodeParser::claimsSingleAddress('Er is maar 1 adres. Oldeburgstraat tweehonderd zeven'));
     }
+
+    public function testParsesUnitThenTensAsFourDigitPostcode(): void
+    {
+        $parsed = DutchPostcodeParser::parse('Nee. De postcode is acht zeven drie twintig Anton Johan drie honderd drieënnegentig');
+        self::assertSame('8732 AJ', $parsed['postcode']);
+        self::assertSame(393, $parsed['house_number']);
+    }
 }

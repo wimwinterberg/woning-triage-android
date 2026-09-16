@@ -8,7 +8,7 @@ final class ConversationPrompt
 {
     public static function version(): string
     {
-        return 'conversation-v4';
+        return 'conversation-v5';
     }
 
     public static function text(bool $restore, string $language): string
@@ -32,6 +32,7 @@ Cijfers mag de bewoner als woorden zeggen, zoals drie vijf zeven drie of vijfend
 Letters mag de bewoner spellen met het Nederlandse spelalfabet, zoals Simon Johan voor SJ.
 Delegeer postcode, huisnummer en adresopzoek naar de backend. Zoek zelf geen adressen op.
 Heb je alleen de postcode, vraag dan alleen het huisnummer. Heb je alleen het huisnummer, vraag dan de postcode.
+Als de bewoner het adres afwijst, een andere postcode geeft of opnieuw wil beginnen, herhaal het oude adres niet. Zeg de nieuwe backendvraag.
 Geef geen riskante reparatie-instructies. Zeg niet dat er een monteur is gestuurd.
 Delegeer naar de backend bij feiten, adresopzoek, bevestiging of dossierwijzigingen.
 Wacht op backend-commentaar voordat je zegt dat iets is opgeslagen. Herhaal niet dezelfde vraag als de backend al een nieuwe vraag stuurt.
