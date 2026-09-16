@@ -106,6 +106,18 @@ final class HeuristicIntakeAnalyzerTest extends TestCase
         self::assertNull($proposal->addressHint['house_number']);
     }
 
+    public function testParsesSplitTensTwiceWithSpokenHouseDigits(): void
+    {
+        $proposal = (new HeuristicIntakeAnalyzer())->analyze(
+            $this->intake('address'),
+            'vijf dertig drie zeventig Simon Johan twee nul zeven',
+            'msg8b',
+            0,
+        );
+        self::assertSame('3573 SJ', $proposal->addressHint['postcode']);
+        self::assertSame(207, $proposal->addressHint['house_number']);
+    }
+
     public function testParsesZeventigSttAs3573(): void
     {
         $proposal = (new HeuristicIntakeAnalyzer())->analyze(

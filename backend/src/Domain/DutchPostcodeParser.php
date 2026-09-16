@@ -159,7 +159,8 @@ final class DutchPostcodeParser
     /**
      * Turns spoken Dutch numbers into digit tokens, packing a 4-digit postcode
      * when possible. "drie vijf zeventig" is treated as 3573 because STT often
-     * hears "zeven drie" as "zeventig".
+     * hears "zeven drie" as "zeventig". "vijf dertig drie zeventig" packs as
+     * 35 + 73 because STT splits compound tens into unit + tens twice.
      *
      * @param list<string> $tokens
      * @return list<string>
@@ -243,6 +244,13 @@ final class DutchPostcodeParser
             $code = sprintf('%02d%02d', $nums[0] + $nums[1], $nums[2]);
             if (preg_match('/^[1-9][0-9]{3}$/', $code) === 1) {
                 return [$code, 3];
+            }
+        }
+        // "vijf dertig drie zeventig" → 3573 (STT splits 35/73 into unit+tens twice).
+        if ($n >= 4 && self::isUnit($nums[0]) && self::isTensValue($nums[1]) && self::isUnit($nums[2]) && self::isTensValue($nums[3])) {
+            $code = sprintf('%02d%02d', $nums[0] + $nums[1], $nums[2] + $nums[3]);
+            if (preg_match('/^[1-9][0-9]{3}$/', $code) === 1) {
+                return [$code, 4];
             }
         }
         if ($n >= 3 && self::isUnit($nums[0]) && self::isUnit($nums[1]) && $nums[2] === 70) {
