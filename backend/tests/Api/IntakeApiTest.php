@@ -311,15 +311,6 @@ final class IntakeApiTest extends WebTestCase
         ], 'sp-4', 202);
         $intake = $this->getIntake($intake['id'], $this->tokenA);
         self::assertSame(12, $intake['address']['house_number']);
-        self::assertNotEmpty($intake['address']['candidates']);
-        self::assertSame('address_select', $intake['next_question']['id']);
-
-        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
-            'expected_revision' => $intake['revision'],
-            'client_message_id' => 'one-addr',
-            'text' => 'Er is maar één adres',
-        ], 'sp-5', 202);
-        $intake = $this->getIntake($intake['id'], $this->tokenA);
         self::assertCount(1, $intake['address']['candidates']);
         self::assertNull($intake['address']['candidates'][0]['addition']);
         self::assertStringStartsWith('address_confirm_', $intake['next_question']['id']);

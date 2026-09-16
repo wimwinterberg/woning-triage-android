@@ -18,7 +18,9 @@ final class AddressNormalizer
 
     public static function compactPostcode(string $postcode): string
     {
-        return strtoupper(preg_replace('/\s+/', '', $postcode) ?? '');
+        $compact = preg_replace('/\s+/u', '', $postcode) ?? '';
+
+        return strtoupper($compact);
     }
 
     public static function samePostcode(string $left, string $right): bool
