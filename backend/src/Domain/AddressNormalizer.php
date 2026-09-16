@@ -41,14 +41,21 @@ final class AddressNormalizer
         return substr($compact, 0, 4).' '.substr($compact, 4, 2);
     }
 
-    public function normalizeHouseNumber(int|string $number): int
+    public function normalizeHouseNumber(int|float|string $number): int
     {
-        $value = is_int($number) ? $number : (int) $number;
-        if ($value < 1 || $value > 99999) {
+        if (is_float($number)) {
+            if (!is_finite($number) || $number !== floor($number)) {
+                throw new \InvalidArgumentException('Ongeldig huisnummer.');
+            }
+            $number = (int) $number;
+        } elseif (is_string($number)) {
+            $number = (int) $number;
+        }
+        if ($number < 1 || $number > 99999) {
             throw new \InvalidArgumentException('Ongeldig huisnummer.');
         }
 
-        return $value;
+        return $number;
     }
 
     public function normalizeAddition(?string $addition): ?string

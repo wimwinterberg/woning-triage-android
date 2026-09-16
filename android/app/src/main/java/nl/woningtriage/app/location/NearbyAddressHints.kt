@@ -37,9 +37,11 @@ object NearbyAddressHints {
         return hints.values.toList()
     }
 
+    private val postcodePattern = Regex("""^[1-9][0-9]{3}\s*[A-Za-z]{2}$""")
+
     fun parseHouseNumber(raw: String?): Pair<Int, String?>? {
         val trimmed = raw?.trim().orEmpty()
-        if (trimmed.isEmpty()) {
+        if (trimmed.isEmpty() || postcodePattern.matches(trimmed)) {
             return null
         }
         val match = houseNumberPattern.matchEntire(trimmed) ?: return null

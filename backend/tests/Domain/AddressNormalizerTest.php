@@ -26,6 +26,7 @@ final class AddressNormalizerTest extends TestCase
         self::assertSame(52.0902, $normalizer->normalizeLatitude(52.0902));
         self::assertSame(5.1219, $normalizer->normalizeLongitude('5.1219'));
         $normalizer->assertInTheNetherlands(52.0902, 5.1219);
+        self::assertSame(12, $normalizer->normalizeHouseNumber(12.0));
     }
 
     public function testRejectsCoordinatesOutsideTheNetherlands(): void

@@ -293,7 +293,13 @@ final class IntakeService
         $this->assertMutable($intake);
         $intake->assertExpectedRevision($expectedRevision);
         $gps = $this->isGpsLookup($request);
-        $nearbyHintCount = 0;
+        $nearbyHintCount = is_array($request['nearby'] ?? null) ? count($request['nearby']) : 0;
+        $this->addressLookupLogger->log('accepted', [
+            'intake_id' => $intake->getId(),
+            'source' => $gps ? 'gps' : 'ui',
+            'nearby_hint_count' => $nearbyHintCount,
+            'has_postcode' => trim((string) ($request['postcode'] ?? '')) !== '',
+        ]);
 
         try {
             if ($gps) {
@@ -319,8 +325,20 @@ final class IntakeService
                 $candidates = $this->lookupCandidates($normalizedPostcode, $normalizedNumber, $normalizedAddition);
                 $source = 'postcode';
             }
+        } catch (ValidationFailedException $exception) {
+            throw $exception;
+        } catch (\App\Exception\AddressLookupUnavailableException $exception) {
+            throw $exception;
         } catch (\InvalidArgumentException $exception) {
             throw new ValidationFailedException($exception->getMessage());
+        } catch (\Throwable $exception) {
+            $this->addressLookupLogger->log('failed', [
+                'intake_id' => $intake->getId(),
+                'source' => $gps ? 'gps' : 'ui',
+                'outcome' => 'unhandled',
+                'exception' => $exception::class,
+            ]);
+            throw new \App\Exception\AddressLookupUnavailableException();
         }
 
         $lookupId = IdGenerator::prefixed('lookup');
@@ -963,14 +981,21 @@ final class IntakeService
                 continue;
             }
             try {
+                $rawNumber = $item['house_number'] ?? 0;
+                if (!is_int($rawNumber) && !is_float($rawNumber) && !is_string($rawNumber)) {
+                    continue;
+                }
                 $postcode = $this->addressNormalizer->normalizePostcode((string) ($item['postcode'] ?? ''));
-                $houseNumber = $this->addressNormalizer->normalizeHouseNumber($item['house_number'] ?? 0);
+                $houseNumber = $this->addressNormalizer->normalizeHouseNumber($rawNumber);
                 $addition = $this->addressNormalizer->normalizeAddition(
                     array_key_exists('addition', $item) && $item['addition'] !== null
                         ? (string) $item['addition']
                         : null,
                 );
             } catch (\InvalidArgumentException) {
+                continue;
+            }
+            if ($this->hintRepeatsPostcode($postcode, $houseNumber, $addition)) {
                 continue;
             }
             $key = AddressNormalizer::compactPostcode($postcode).':'.$houseNumber.':'.strtolower((string) $addition);
@@ -999,6 +1024,17 @@ final class IntakeService
         );
     }
 
+    private function hintRepeatsPostcode(string $postcode, int $houseNumber, ?string $addition): bool
+    {
+        $compact = AddressNormalizer::compactPostcode($postcode);
+        if (strlen($compact) !== 6) {
+            return false;
+        }
+
+        return (string) $houseNumber === substr($compact, 0, 4)
+            && strtoupper((string) $addition) === substr($compact, 4, 2);
+    }
+
     /**
      * @param list<array{postcode: string, house_number: int, addition: ?string}> $hints
      * @return list<array<string, mixed>>
@@ -1007,8 +1043,26 @@ final class IntakeService
     {
         $merged = [];
         $seen = [];
+        $unavailable = 0;
         foreach ($hints as $hint) {
-            foreach ($this->lookupCandidates($hint['postcode'], $hint['house_number'], $hint['addition']) as $candidate) {
+            try {
+                $batch = $this->lookupCandidates($hint['postcode'], $hint['house_number'], $hint['addition']);
+            } catch (\App\Exception\AddressLookupUnavailableException) {
+                ++$unavailable;
+                $this->addressLookupLogger->log('hint_unavailable', [
+                    'outcome' => 'hint_unavailable',
+                    'provider' => $this->addressProvider::class,
+                ]);
+                continue;
+            } catch (\Throwable $exception) {
+                $this->addressLookupLogger->log('hint_error', [
+                    'outcome' => 'hint_error',
+                    'exception' => $exception::class,
+                    'provider' => $this->addressProvider::class,
+                ]);
+                continue;
+            }
+            foreach ($batch as $candidate) {
                 $key = strtolower(trim((string) ($candidate['provider_id'] ?? $candidate['display_address'] ?? '')));
                 if ($key === '') {
                     $key = implode(':', [
@@ -1026,6 +1080,10 @@ final class IntakeService
                     return $merged;
                 }
             }
+        }
+
+        if ($merged === [] && $unavailable > 0 && $unavailable === count($hints) && $hints !== []) {
+            throw new \App\Exception\AddressLookupUnavailableException();
         }
 
         return $merged;

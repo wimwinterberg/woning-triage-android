@@ -323,6 +323,31 @@ final class IntakeApiTest extends WebTestCase
         self::assertSame('address_no_match', $intake['next_question']['id']);
     }
 
+    public function testGpsLookupAcceptsLivePhonePayloadAndDropsPostcodeShapedHints(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $lookup = $this->postJson('/api/v1/intakes/'.$intake['id'].'/address-lookups', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'latitude' => 52.1049964,
+            'longitude' => 5.14586584,
+            'nearby' => [
+                ['postcode' => '3573 SJ', 'house_number' => 10],
+                ['postcode' => '3573 SK', 'house_number' => 70],
+                ['postcode' => '3573 SK', 'house_number' => 68],
+                ['postcode' => '3573 SK', 'house_number' => 76],
+                ['postcode' => '3573 SJ', 'house_number' => 207],
+                ['postcode' => '3573 SJ', 'house_number' => 3573, 'addition' => 'SJ'],
+                ['postcode' => '1234 AB', 'house_number' => 12.0],
+            ],
+        ], 'g-live');
+        self::assertGreaterThan(1, count($lookup['candidates']));
+        $streets = array_values(array_unique(array_map(static fn (array $candidate): string => $candidate['street'], $lookup['candidates'])));
+        self::assertSame(['Voorbeeldstraat'], $streets);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('unverified', $intake['address']['verification_status']);
+        self::assertSame('address_select', $intake['next_question']['id']);
+    }
+
     public function testVoiceSessionFakeAndEnglishLanguageSwitch(): void
     {
         $intake = $this->createIntake($this->tokenA);

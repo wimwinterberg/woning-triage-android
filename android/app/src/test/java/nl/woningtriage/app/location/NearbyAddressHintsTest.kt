@@ -43,6 +43,8 @@ class NearbyAddressHintsTest {
         assertEquals(12 to "bis", NearbyAddressHints.parseHouseNumber("12-bis"))
         assertEquals(207 to null, NearbyAddressHints.parseHouseNumber("207"))
         assertEquals(null, NearbyAddressHints.parseHouseNumber("Oldenburgerstraat"))
+        assertEquals(null, NearbyAddressHints.parseHouseNumber("3573 SJ"))
+        assertEquals(null, NearbyAddressHints.parseHouseNumber("3573SJ"))
     }
 
     @Test
@@ -52,6 +54,20 @@ class NearbyAddressHintsTest {
                 GeocodedPlace(
                     postalCode = "3573 SJ",
                     featureName = "Utrecht",
+                    countryCode = "NL",
+                ),
+            ),
+        )
+        assertTrue(hints.isEmpty())
+    }
+
+    @Test
+    fun ignoresFeatureNameThatIsAPostcode() {
+        val hints = NearbyAddressHints.fromPlaces(
+            listOf(
+                GeocodedPlace(
+                    postalCode = "3573 SJ",
+                    featureName = "3573 SJ",
                     countryCode = "NL",
                 ),
             ),

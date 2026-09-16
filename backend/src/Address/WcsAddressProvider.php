@@ -49,6 +49,9 @@ final class WcsAddressProvider implements AddressProvider
 
         $compactPostcode = AddressNormalizer::compactPostcode($postcode);
         $url = rtrim($this->baseUrl, '/').'/v1/postcode/'.rawurlencode($compactPostcode).'/'.rawurlencode((string) $houseNumber);
+        $this->lookupLogger->log('started', $base + [
+            'outcome' => 'http_request',
+        ]);
 
         try {
             $response = $this->httpClient->request('GET', $url, [
@@ -129,7 +132,16 @@ final class WcsAddressProvider implements AddressProvider
                 ++$dropped['not_array'];
                 continue;
             }
-            $mapped = $this->interpretItem($item, $postcode, $houseNumber);
+            try {
+                $mapped = $this->interpretItem($item, $postcode, $houseNumber);
+            } catch (\Throwable $exception) {
+                ++$dropped['incomplete'];
+                $this->lookupLogger->log('item_error', $base + [
+                    'outcome' => 'item_error',
+                    'exception' => $exception::class,
+                ]);
+                continue;
+            }
             if (isset($mapped['drop'])) {
                 $reason = $mapped['drop'];
                 $dropped[$reason] = ($dropped[$reason] ?? 0) + 1;
@@ -175,9 +187,9 @@ final class WcsAddressProvider implements AddressProvider
      */
     private function interpretItem(array $item, string $requestedPostcode, int $requestedNumber): array
     {
-        $street = trim((string) ($item['street'] ?? ''));
-        $city = trim((string) ($item['city'] ?? ''));
-        $number = (int) ($item['houseNumber'] ?? 0);
+        $street = $this->scalarString($item, 'street');
+        $city = $this->scalarString($item, 'city');
+        $number = $this->scalarHouseNumber($item['houseNumber'] ?? null);
         if ($street === '' || $city === '' || $number < 1) {
             return ['drop' => 'incomplete'];
         }
@@ -185,7 +197,7 @@ final class WcsAddressProvider implements AddressProvider
             return ['drop' => 'house_number_mismatch'];
         }
 
-        $postalCode = trim((string) ($item['postalCode'] ?? ''));
+        $postalCode = $this->scalarString($item, 'postalCode');
         if ($postalCode === '') {
             $postalCode = $requestedPostcode;
         }
@@ -197,7 +209,7 @@ final class WcsAddressProvider implements AddressProvider
             return ['drop' => 'postcode_mismatch'];
         }
 
-        $country = strtolower(trim((string) ($item['country'] ?? self::COUNTRY)));
+        $country = strtolower($this->scalarString($item, 'country'));
         if ($country === '') {
             $country = self::COUNTRY;
         }
@@ -210,9 +222,9 @@ final class WcsAddressProvider implements AddressProvider
             strtolower($country),
             $displayPostcode,
             (string) $number,
-            trim((string) ($item['houseLetter'] ?? '')),
-            trim((string) ($item['houseNumberAddition'] ?? '')),
-            trim((string) ($item['unitNumber'] ?? '')),
+            $this->scalarString($item, 'houseLetter'),
+            $this->scalarString($item, 'houseNumberAddition'),
+            $this->scalarString($item, 'unitNumber'),
         ]);
 
         return [
@@ -236,13 +248,44 @@ final class WcsAddressProvider implements AddressProvider
     {
         $parts = [];
         foreach (['houseLetter', 'houseNumberAddition', 'unitNumber'] as $field) {
-            $value = trim((string) ($item[$field] ?? ''));
+            $value = $this->scalarString($item, $field);
             if ($value !== '') {
                 $parts[] = $value;
             }
         }
 
         return $parts === [] ? null : implode(' ', $parts);
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    private function scalarString(array $item, string $key): string
+    {
+        $value = $item[$key] ?? '';
+        if (is_string($value)) {
+            return trim($value);
+        }
+        if (is_int($value) || (is_float($value) && is_finite($value))) {
+            return trim((string) $value);
+        }
+
+        return '';
+    }
+
+    private function scalarHouseNumber(mixed $value): int
+    {
+        if (is_int($value)) {
+            return $value;
+        }
+        if (is_float($value) && is_finite($value) && $value === floor($value)) {
+            return (int) $value;
+        }
+        if (is_string($value) && is_numeric($value)) {
+            return (int) $value;
+        }
+
+        return 0;
     }
 
     private function elapsedMs(float $started): int

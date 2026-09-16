@@ -51,6 +51,21 @@ final class ApiExceptionSubscriber implements EventSubscriberInterface
         }
         $requestId = (string) $request->attributes->get('request_id', 'unknown');
         $exception = $event->getThrowable();
+        if (!$exception instanceof ApiException && !$exception instanceof AuthenticationException) {
+            $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : 500;
+            if ($status >= 500) {
+                fwrite(STDERR, sprintf(
+                    "[%s] API internal_error request_id=%s exception=%s path=%s file=%s line=%d\n",
+                    gmdate('Y-m-d H:i:s'),
+                    $requestId,
+                    $exception::class,
+                    $request->getPathInfo(),
+                    $exception->getFile(),
+                    $exception->getLine(),
+                ));
+                fflush(STDERR);
+            }
+        }
 
         if ($exception instanceof ApiException) {
             $payload = [
