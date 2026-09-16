@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Api;
 
+use App\Entity\Intake;
 use App\Service\AuthService;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -431,6 +432,95 @@ final class IntakeApiTest extends WebTestCase
         self::assertSame('De melding is vastgelegd.', $intake['next_question']['text']);
     }
 
+    public function testSpokenOneShotLedoThenKloptAndJaRecordsTheReport(): void
+    {
+        $intake = $this->createIntake($this->tokenA);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => 0,
+            'client_message_id' => 'one-shot-ledo',
+            'text' => 'Een lekkende kraan in de badkamer. Oorzaak onbekend',
+        ], 'one-shot-1', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('ask_address', $intake['next_question']['id']);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'one-shot-pc',
+            'text' => '1234 anton bernard huisnummer 12',
+        ], 'one-shot-2', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertStringStartsWith('address_confirm_', $intake['next_question']['id']);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'one-shot-klopt',
+            'text' => "Klopt\u{00A0}",
+        ], 'one-shot-3', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('verified', $intake['address']['verification_status']);
+        self::assertNotNull($intake['summary']);
+        self::assertNull($intake['report_id']);
+        self::assertStringContainsString('Klopt dit?', $intake['next_question']['text']);
+        self::assertStringContainsString('Badkamer', $intake['next_question']['text']);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'one-shot-ja',
+            'text' => 'Ja, rond af',
+        ], 'one-shot-4', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('confirmed', $intake['status']);
+        self::assertNotNull($intake['report_id']);
+        self::assertSame('intake_confirmed', $intake['next_question']['id']);
+        self::assertSame('De melding is vastgelegd.', $intake['next_question']['text']);
+    }
+
+    public function testSpokenYesOnTreeSummaryPlaceholderRecordsTheReport(): void
+    {
+        $intake = $this->spokenAddressConfirm($this->tokenA);
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'addr-ja',
+            'text' => 'Ja',
+        ], 'placeholder-1', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertNotNull($intake['summary']);
+        self::assertNull($intake['report_id']);
+
+        $this->forceNextQuestion($intake['id'], 'terminal_summary', 'Ik vat het probleem samen zodat u het kunt controleren.');
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'tree-summary-ja',
+            'text' => 'Ja',
+        ], 'placeholder-2', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('confirmed', $intake['status']);
+        self::assertNotNull($intake['report_id']);
+        self::assertSame('De melding is vastgelegd.', $intake['next_question']['text']);
+    }
+
+    public function testSpokenYesOnPlaceholderWithoutSummaryRecordsTheReport(): void
+    {
+        $intake = $this->spokenAddressConfirm($this->tokenA);
+        $this->forceVerifiedAddressStuckOnTreeSummary($intake['id']);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('verified', $intake['address']['verification_status']);
+        self::assertNull($intake['summary']);
+        self::assertSame('terminal_summary', $intake['next_question']['id']);
+
+        $this->postJson('/api/v1/intakes/'.$intake['id'].'/messages', $this->tokenA, [
+            'expected_revision' => $intake['revision'],
+            'client_message_id' => 'stuck-ja',
+            'text' => 'Ja',
+        ], 'stuck-1', 202);
+        $intake = $this->getIntake($intake['id'], $this->tokenA);
+        self::assertSame('confirmed', $intake['status']);
+        self::assertNotNull($intake['report_id']);
+        self::assertSame('De melding is vastgelegd.', $intake['next_question']['text']);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -507,5 +597,45 @@ final class IntakeApiTest extends WebTestCase
     private function auth(string $token): array
     {
         return ['HTTP_AUTHORIZATION' => 'Bearer '.$token];
+    }
+
+    private function forceNextQuestion(string $intakeId, string $id, string $text): void
+    {
+        $entityManager = static::getContainer()->get('doctrine')->getManager();
+        $intake = $entityManager->find(Intake::class, $intakeId);
+        self::assertInstanceOf(Intake::class, $intake);
+        $document = $intake->document();
+        $document->nextQuestion = ['id' => $id, 'target' => null, 'text' => $text];
+        $intake->replaceDocument($document);
+        $entityManager->flush();
+        $entityManager->clear();
+    }
+
+    private function forceVerifiedAddressStuckOnTreeSummary(string $intakeId): void
+    {
+        $entityManager = static::getContainer()->get('doctrine')->getManager();
+        $intake = $entityManager->find(Intake::class, $intakeId);
+        self::assertInstanceOf(Intake::class, $intake);
+        $document = $intake->document();
+        $candidate = $document->address['candidates'][0] ?? null;
+        self::assertIsArray($candidate);
+        $document->verifyAddress(
+            (string) $document->address['lookup_id'],
+            (string) $candidate['candidate_id'],
+            (int) $document->address['address_revision'],
+            'voice',
+            'stuck-evidence',
+        );
+        $document->summary = null;
+        $document->pendingSummaryQuestionId = null;
+        $document->pendingAddressQuestionId = null;
+        $document->nextQuestion = [
+            'id' => 'terminal_summary',
+            'target' => null,
+            'text' => 'Ik vat het probleem samen zodat u het kunt controleren.',
+        ];
+        $intake->replaceDocument($document);
+        $entityManager->flush();
+        $entityManager->clear();
     }
 }

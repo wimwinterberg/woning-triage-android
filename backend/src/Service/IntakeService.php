@@ -145,24 +145,9 @@ final class IntakeService
 
             $document = $intake->document();
             $spokenYes = $this->isSpokenYes($text, $proposal->explicitConfirmationAttempt);
+            $wasOnSummary = $this->isOnSpokenSummaryQuestion($document);
             if ($this->shouldConfirmSpokenSummary($intake, $document, $spokenYes)) {
-                $intake->replaceDocument($document);
-                $task->succeed($intake->getRevision());
-                $this->entityManager->flush();
-                $this->confirm(
-                    $intake,
-                    $intake->getRevision(),
-                    (string) $document->summary['id'],
-                    'voice',
-                    $messageId,
-                );
-                $document = $intake->document();
-                $this->presentClosingQuestion($intake, $document);
-                $intake->replaceDocument($document);
-                $this->maybeAddAssistantQuestion($intake, $document);
-                $this->events->publish($intake, 'intake.updated');
-                $this->events->publish($intake, 'task.updated', ['task_id' => $task->getId(), 'status' => $task->getStatus()]);
-                $this->entityManager->flush();
+                $this->confirmSpokenReport($intake, $document, $task, $messageId);
 
                 return;
             }
@@ -207,6 +192,11 @@ final class IntakeService
             } elseif ($document->summary !== null && $intake->getStatus() === IntakeStatus::ReadyForConfirmation) {
                 $this->presentSummaryQuestion($intake, $document);
                 $intake->replaceDocument($document);
+            }
+            if ($spokenYes && $wasOnSummary && $document->summary !== null && !$intake->getStatus()->isLocked()) {
+                $this->confirmSpokenReport($intake, $document, $task, $messageId);
+
+                return;
             }
             $task->succeed($intake->getRevision());
             $this->maybeAddAssistantQuestion($intake, $document);
@@ -1046,10 +1036,24 @@ final class IntakeService
         if ($bareYes) {
             return true;
         }
-        $normalized = mb_strtolower(trim($text));
+        $normalized = $this->normalizeSpokenConfirmation($text);
+        if ($normalized === '') {
+            return false;
+        }
 
-        return preg_match('/^(ja|yes|ok|okay|oké|klopt)\b/u', $normalized) === 1
-            || preg_match('/\b(dat klopt|that(?:\'s| is) (correct|my address)|dat is mijn adres|gecontroleerd)\b/u', $normalized) === 1;
+        return preg_match('/^(ja|yes|ok|okay|oke|klopt)\b/u', $normalized) === 1
+            || preg_match('/\b(dat klopt|that(?:\'s| is) (correct|my address)|dat is mijn adres|gecontroleerd|rond\s*af|afronden|leg(?:\s+het)?\s+vast|vastleggen)\b/u', $normalized) === 1;
+    }
+
+    private function normalizeSpokenConfirmation(string $text): string
+    {
+        $folded = mb_strtolower(trim($text));
+        $folded = str_replace(["\u{FEFF}", "\u{200B}", "\u{00A0}", "\u{202F}"], ' ', $folded);
+        $folded = str_replace(['ë', 'é', 'è', 'ï'], ['e', 'e', 'e', 'i'], $folded);
+        $folded = preg_replace('/^[^\p{L}\p{N}]+/u', '', $folded) ?? $folded;
+        $folded = trim(preg_replace('/\s+/u', ' ', $folded) ?? $folded);
+
+        return $folded;
     }
 
     private function maybeConfirmPendingAddress(
@@ -1058,21 +1062,43 @@ final class IntakeService
         string $messageId,
         bool $spokenYes,
     ): void {
-        $nextId = $document->nextQuestion['id'] ?? null;
-        if ($document->pendingAddressQuestionId === null || $nextId !== $document->pendingAddressQuestionId || !$spokenYes) {
+        if (!$spokenYes || $document->isAddressVerified()) {
             return;
         }
-        $candidate = $document->address['candidates'][0] ?? null;
-        if (is_array($candidate) && count($document->address['candidates'] ?? []) === 1) {
-            $document->verifyAddress(
-                (string) $document->address['lookup_id'],
-                (string) $candidate['candidate_id'],
-                (int) $document->address['address_revision'],
-                'voice',
-                $messageId,
-            );
-            $document->pendingAddressQuestionId = null;
+        $candidates = $this->candidateList($document->address['candidates'] ?? []);
+        if (count($candidates) !== 1) {
+            return;
         }
+        $lookupId = $document->address['lookup_id'] ?? null;
+        if (!is_string($lookupId) || $lookupId === '') {
+            return;
+        }
+        $nextId = (string) ($document->nextQuestion['id'] ?? '');
+        if (in_array($nextId, ['address_ask_house_number', 'address_ask_postcode', 'address_lookup_unavailable', 'address_no_match', 'address_select'], true)) {
+            return;
+        }
+        if (!$this->isAddressFollowUp($document) && $document->pendingAddressQuestionId === null) {
+            return;
+        }
+        $candidate = $candidates[0];
+        $document->verifyAddress(
+            $lookupId,
+            (string) $candidate['candidate_id'],
+            (int) $document->address['address_revision'],
+            'voice',
+            $messageId,
+        );
+        $document->pendingAddressQuestionId = null;
+    }
+
+    private function isOnSpokenSummaryQuestion(\App\Domain\IntakeDocument $document): bool
+    {
+        $nextId = $document->nextQuestion['id'] ?? null;
+        $summaryId = $document->summary['id'] ?? null;
+
+        return $nextId === 'terminal_summary'
+            || ($document->nextQuestion['target'] ?? null) === 'summary'
+            || (is_string($summaryId) && $summaryId !== '' && $nextId === $summaryId);
     }
 
     private function shouldConfirmSpokenSummary(Intake $intake, \App\Domain\IntakeDocument $document, bool $spokenYes): bool
@@ -1080,16 +1106,13 @@ final class IntakeService
         if (!$spokenYes || $document->summary === null) {
             return false;
         }
-        $nextId = $document->nextQuestion['id'] ?? null;
         $summaryId = $document->summary['id'] ?? null;
         if (!is_string($summaryId) || $summaryId === '') {
             return false;
         }
-        $onSummary = $nextId === $summaryId
-            || $nextId === 'terminal_summary'
-            || ($document->nextQuestion['target'] ?? null) === 'summary';
 
-        return $onSummary && ($intake->getStatus() === IntakeStatus::ReadyForConfirmation || $intake->getStatus() === IntakeStatus::Collecting);
+        return $this->isOnSpokenSummaryQuestion($document)
+            && ($intake->getStatus() === IntakeStatus::ReadyForConfirmation || $intake->getStatus() === IntakeStatus::Collecting);
     }
 
     private function shouldOfferSpokenSummary(Intake $intake, \App\Domain\IntakeDocument $document): bool
@@ -1097,13 +1120,36 @@ final class IntakeService
         if ($document->summary !== null || !$document->isAddressVerified() || $document->hasBlockingNeedsReview()) {
             return false;
         }
-        if ($document->riskState()->blocksNormalCompletion() || $document->incompleteFieldIds() !== []) {
+        if ($document->riskState()->blocksNormalCompletion()) {
             return false;
+        }
+        if (($document->nextQuestion['id'] ?? null) === 'terminal_summary') {
+            return true;
         }
         $tree = $this->treeRepository->getPublished($intake->getTreeVersion());
         $next = $this->treeEngine->next($tree, $document, $intake->getConversationLanguage());
 
         return ($next['outcome'] ?? null) === 'summary_possible';
+    }
+
+    private function confirmSpokenReport(
+        Intake $intake,
+        \App\Domain\IntakeDocument $document,
+        AnalysisTask $task,
+        string $messageId,
+    ): void {
+        $summaryId = (string) ($document->summary['id'] ?? '');
+        $intake->replaceDocument($document);
+        $task->succeed($intake->getRevision());
+        $this->entityManager->flush();
+        $this->confirm($intake, $intake->getRevision(), $summaryId, 'voice', $messageId);
+        $document = $intake->document();
+        $this->presentClosingQuestion($intake, $document);
+        $intake->replaceDocument($document);
+        $this->maybeAddAssistantQuestion($intake, $document);
+        $this->events->publish($intake, 'intake.updated');
+        $this->events->publish($intake, 'task.updated', ['task_id' => $task->getId(), 'status' => $task->getStatus()]);
+        $this->entityManager->flush();
     }
 
     /**

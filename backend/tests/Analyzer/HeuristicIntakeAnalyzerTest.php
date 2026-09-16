@@ -149,6 +149,12 @@ final class HeuristicIntakeAnalyzerTest extends TestCase
         self::assertSame([], $proposal->fieldUpdates);
     }
 
+    public function testKloptWithTrailingPunctuationIsAConfirmation(): void
+    {
+        $proposal = (new HeuristicIntakeAnalyzer())->analyze($this->intake('address'), 'Klopt!', 'msg-k2', 0);
+        self::assertTrue($proposal->explicitConfirmationAttempt);
+    }
+
     private function intake(?string $target = null): Intake
     {
         $user = new User('user_test', 'tester');
