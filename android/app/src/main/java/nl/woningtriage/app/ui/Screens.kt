@@ -62,7 +62,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.painterResource
@@ -118,14 +117,13 @@ private fun AppLocale(tag: String, content: @Composable () -> Unit) {
     }
     // createConfigurationContext() is not the Activity. rememberLauncherForActivityResult
     // looks up LocalActivityResultRegistryOwner from LocalContext, so keep the Activity owner.
-    // Compose 1.7 stringResource() reads LocalResources, not only LocalContext.
+    // Compose 1.7 stringResource() reads LocalConfiguration then LocalContext.resources.
     val layoutDirection = if (UiLocale.isRtl(tag)) LayoutDirection.Rtl else LayoutDirection.Ltr
     val registryOwner = LocalActivityResultRegistryOwner.current
     if (registryOwner != null) {
         CompositionLocalProvider(
             LocalContext provides wrapped,
             LocalConfiguration provides wrapped.resources.configuration,
-            LocalResources provides wrapped.resources,
             LocalLayoutDirection provides layoutDirection,
             LocalActivityResultRegistryOwner provides registryOwner,
             content = content,
@@ -134,7 +132,6 @@ private fun AppLocale(tag: String, content: @Composable () -> Unit) {
         CompositionLocalProvider(
             LocalContext provides wrapped,
             LocalConfiguration provides wrapped.resources.configuration,
-            LocalResources provides wrapped.resources,
             LocalLayoutDirection provides layoutDirection,
             content = content,
         )
