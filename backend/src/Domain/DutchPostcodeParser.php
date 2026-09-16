@@ -6,8 +6,9 @@ namespace App\Domain;
 
 /**
  * Dutch postcodes are 4 digits + 2 letters (e.g. 3573 SJ).
- * Letters may be spoken with the Dutch spelling alphabet (Simon Johan → SJ).
- * Digits may be spoken as words (drie vijf zeven drie, vijfendertig drieënzeventig).
+ * Letters may be spoken with the Dutch spelling alphabet (Simon Johan → SJ)
+ * or NATO words (Sierra Juliet → SJ).
+ * Digits may be spoken as Dutch, English, German, Turkish or Japanese words.
  */
 final class DutchPostcodeParser
 {
@@ -21,7 +22,7 @@ final class DutchPostcodeParser
         'gerard' => 'G', 'golf' => 'G',
         'hendrik' => 'H', 'hotel' => 'H',
         'izaak' => 'I', 'isaac' => 'I', 'isaak' => 'I', 'india' => 'I',
-        'johan' => 'J', 'julius' => 'J', 'juliett' => 'J', 'juliet' => 'J',
+        'johan' => 'J', 'julius' => 'J', 'juliett' => 'J', 'juliet' => 'J', 'jay' => 'J',
         'karel' => 'K', 'kilo' => 'K',
         'lodewijk' => 'L', 'lima' => 'L',
         'marie' => 'M', 'maria' => 'M', 'mike' => 'M',
@@ -30,7 +31,7 @@ final class DutchPostcodeParser
         'pieter' => 'P', 'peter' => 'P', 'papa' => 'P',
         'quebec' => 'Q', 'quotiënt' => 'Q', 'quotient' => 'Q',
         'richard' => 'R', 'romeo' => 'R', 'rudolf' => 'R',
-        'simon' => 'S', 'sierra' => 'S', 'ess' => 'S',
+        'simon' => 'S', 'sierra' => 'S', 'ess' => 'S', 'siegfried' => 'S',
         'theodoor' => 'T', 'theodore' => 'T', 'tango' => 'T', 'teunis' => 'T',
         'utrecht' => 'U', 'uniform' => 'U',
         'victor' => 'V',
@@ -43,30 +44,55 @@ final class DutchPostcodeParser
     private const STOP = [
         'de', 'het', 'een', 'van', 'en', 'in', 'op', 'te', 'is', 'ik', 'mijn',
         'huisnummer', 'postcode', 'straat', 'woning', 'nummer', 'toevoeging',
-        'the', 'and', 'my', 'number', 'stad', 'plaats',
+        'the', 'and', 'my', 'number', 'stad', 'plaats', 'house', 'postal', 'code',
+        'address', 'home', 'please', 'street', 'hausnummer', 'wohnung',
+        'postleitzahl', 'plz', 'numara', 'daire', 'zip', 'und',
     ];
 
+    private const CONNECTORS = ['en', 'ën', 'and', 'und'];
+
+    private const HUNDRED_WORDS = ['honderd', 'hundred', 'hundert', 'yuz', 'hyaku'];
+
     private const UNITS = [
-        'nul' => 0,
-        'een' => 1, 'één' => 1, 'eén' => 1,
-        'twee' => 2,
-        'drie' => 3,
-        'vier' => 4,
-        'vijf' => 5,
-        'zes' => 6,
-        'zeven' => 7,
-        'acht' => 8,
-        'negen' => 9,
+        'nul' => 0, 'zero' => 0, 'oh' => 0, 'nought' => 0, 'null' => 0, 'sifir' => 0, 'rei' => 0,
+        'een' => 1, 'één' => 1, 'eén' => 1, 'one' => 1, 'eins' => 1, 'ein' => 1, 'bir' => 1, 'ichi' => 1,
+        'twee' => 2, 'two' => 2, 'zwei' => 2, 'iki' => 2,
+        'drie' => 3, 'three' => 3, 'drei' => 3, 'uc' => 3, 'さん' => 3,
+        'vier' => 4, 'four' => 4, 'dort' => 4, 'yon' => 4, 'よん' => 4,
+        'vijf' => 5, 'five' => 5, 'funf' => 5, 'fuenf' => 5, 'bes' => 5, 'ご' => 5,
+        'zes' => 6, 'six' => 6, 'sechs' => 6, 'alti' => 6, 'roku' => 6, 'ろく' => 6,
+        'zeven' => 7, 'seven' => 7, 'sieben' => 7, 'yedi' => 7, 'nana' => 7, 'なな' => 7,
+        'acht' => 8, 'eight' => 8, 'sekiz' => 8, 'hachi' => 8, 'はち' => 8,
+        'negen' => 9, 'nine' => 9, 'niner' => 9, 'neun' => 9, 'dokuz' => 9, 'kyuu' => 9, 'kyu' => 9, 'きゅう' => 9,
+        'いち' => 1, 'に' => 2, 'ゼロ' => 0,
     ];
 
     private const TEENS = [
         'tien' => 10, 'elf' => 11, 'twaalf' => 12, 'dertien' => 13, 'veertien' => 14,
         'vijftien' => 15, 'zestien' => 16, 'zeventien' => 17, 'achttien' => 18, 'negentien' => 19,
+        'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14,
+        'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17, 'eighteen' => 18, 'nineteen' => 19,
+        'zehn' => 10, 'zwoelf' => 12, 'zwolf' => 12, 'dreizehn' => 13, 'vierzehn' => 14,
+        'funfzehn' => 15, 'sechzehn' => 16, 'siebzehn' => 17, 'achtzehn' => 18, 'neunzehn' => 19,
     ];
 
     private const TENS = [
         'twintig' => 20, 'dertig' => 30, 'veertig' => 40, 'vijftig' => 50,
         'zestig' => 60, 'zeventig' => 70, 'tachtig' => 80, 'negentig' => 90,
+        'twenty' => 20, 'thirty' => 30, 'forty' => 40, 'fifty' => 50,
+        'sixty' => 60, 'seventy' => 70, 'eighty' => 80, 'ninety' => 90,
+        'zwanzig' => 20, 'dreissig' => 30, 'vierzig' => 40, 'funfzig' => 50,
+        'sechzig' => 60, 'siebzig' => 70, 'achtzig' => 80, 'neunzig' => 90,
+        'yirmi' => 20, 'otuz' => 30, 'kirk' => 40, 'elli' => 50,
+        'altmis' => 60, 'yetmis' => 70, 'seksen' => 80, 'doksan' => 90,
+        'nijuu' => 20, 'sanjuu' => 30, 'yonjuu' => 40, 'gojuu' => 50,
+        'rokujuu' => 60, 'nanajuu' => 70, 'hachijuu' => 80, 'kyuujuu' => 90,
+    ];
+
+    private const TENS_THEN_UNIT = [
+        'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety',
+        'yirmi', 'otuz', 'kirk', 'elli', 'altmis', 'yetmis', 'seksen', 'doksan',
+        'nijuu', 'sanjuu', 'yonjuu', 'gojuu', 'rokujuu', 'nanajuu', 'hachijuu', 'kyuujuu',
     ];
 
     /**
@@ -129,7 +155,10 @@ final class DutchPostcodeParser
     {
         $lower = mb_strtolower($text);
 
-        return (bool) preg_match('/er is maar (één|een|1) adres|slechts (één|een|1) adres/u', $lower);
+        return (bool) preg_match(
+            '/er is maar (één|een|1) adres|slechts (één|een|1) adres|there(?:\'s| is) (only |just )?one address|only one address|nur eine adresse|sadece bir adres/u',
+            $lower,
+        );
     }
 
     private static function extractStreet(string $text): ?string
@@ -247,6 +276,12 @@ final class DutchPostcodeParser
             }
         }
         // "vijf dertig drie zeventig" → 3573 (STT splits 35/73 into unit+tens twice).
+        if ($n >= 4 && self::isTensValue($nums[0]) && self::isUnit($nums[1]) && self::isTensValue($nums[2]) && self::isUnit($nums[3])) {
+            $code = sprintf('%02d%02d', $nums[0] + $nums[1], $nums[2] + $nums[3]);
+            if (preg_match('/^[1-9][0-9]{3}$/', $code) === 1) {
+                return [$code, 4];
+            }
+        }
         if ($n >= 4 && self::isUnit($nums[0]) && self::isTensValue($nums[1]) && self::isUnit($nums[2]) && self::isTensValue($nums[3])) {
             $code = sprintf('%02d%02d', $nums[0] + $nums[1], $nums[2] + $nums[3]);
             if (preg_match('/^[1-9][0-9]{3}$/', $code) === 1) {
@@ -353,12 +388,19 @@ final class DutchPostcodeParser
 
         $units = self::lookupMap($token, self::UNITS);
         $nextIndex = $index + 1;
-        $hasEn = isset($tokens[$nextIndex]) && in_array(self::fold($tokens[$nextIndex]), ['en', 'ën'], true);
-        if ($units !== null && $hasEn) {
+        if ($units !== null && isset($tokens[$nextIndex]) && self::isConnector($tokens[$nextIndex])) {
             ++$nextIndex;
             $tens = isset($tokens[$nextIndex]) ? self::lookupMap($tokens[$nextIndex], self::TENS) : null;
             if ($tens !== null && $units >= 1 && $units <= 9) {
                 return ['value' => $units + $tens, 'next' => $nextIndex + 1];
+            }
+        }
+
+        $tensFirst = self::lookupMap($token, self::TENS);
+        if ($tensFirst !== null && in_array(self::fold($token), self::TENS_THEN_UNIT, true) && isset($tokens[$index + 1])) {
+            $unitAfterTens = self::lookupMap($tokens[$index + 1], self::UNITS);
+            if ($unitAfterTens !== null && $unitAfterTens >= 1 && $unitAfterTens <= 9) {
+                return ['value' => $tensFirst + $unitAfterTens, 'next' => $index + 2];
             }
         }
 
@@ -382,15 +424,20 @@ final class DutchPostcodeParser
         $hundreds = null;
         $next = $index + 1;
         $remainder = '';
-        if (preg_match('/^(een|twee|drie|vier|vijf|zes|zeven|acht|negen)honderd(.*)$/u', $folded, $match) === 1) {
-            $hundreds = self::UNITS[$match[1]] * 100;
-            $remainder = $match[2];
-        } elseif (preg_match('/^honderd(.*)$/u', $folded, $match) === 1) {
+        $unitNames = 'een|twee|drie|vier|vijf|zes|zeven|acht|negen|one|two|three|four|five|six|seven|eight|nine|eins|zwei|drei|funf|fuenf|sechs|sieben|neun|bir|iki|uc|dort|bes|alti|yedi|sekiz|dokuz';
+        $hundredNames = implode('|', self::HUNDRED_WORDS);
+        if (preg_match('/^('.$unitNames.')('.$hundredNames.')(.*)$/u', $folded, $match) === 1) {
+            $unitValue = self::lookupMap($match[1], self::UNITS);
+            if ($unitValue !== null) {
+                $hundreds = $unitValue * 100;
+                $remainder = $match[3];
+            }
+        } elseif (preg_match('/^('.$hundredNames.')(.*)$/u', $folded, $match) === 1) {
             $hundreds = 100;
-            $remainder = $match[1];
+            $remainder = $match[2];
         } else {
             $units = self::lookupMap($tokens[$index], self::UNITS);
-            if ($units !== null && $units >= 1 && $units <= 9 && isset($tokens[$next]) && self::fold($tokens[$next]) === 'honderd') {
+            if ($units !== null && $units >= 1 && $units <= 9 && isset($tokens[$next]) && in_array(self::fold($tokens[$next]), self::HUNDRED_WORDS, true)) {
                 $hundreds = $units * 100;
                 ++$next;
             }
@@ -403,6 +450,9 @@ final class DutchPostcodeParser
 
             return $extra === null ? null : ['value' => $hundreds + $extra, 'next' => $next];
         }
+        if (isset($tokens[$next]) && self::isConnector($tokens[$next])) {
+            ++$next;
+        }
         $extra = self::consumeSmallNumber($tokens, $next);
 
         return ['value' => $hundreds + $extra['value'], 'next' => $extra['next']];
@@ -411,13 +461,16 @@ final class DutchPostcodeParser
     private static function valueFromSpokenFragment(string $fragment): ?int
     {
         $folded = self::fold($fragment);
-        if (in_array($folded, ['en', 'n'], true)) {
+        if (in_array($folded, self::CONNECTORS, true) || $folded === 'n') {
             return 0;
         }
-        if (str_starts_with($folded, 'en')) {
-            $stripped = substr($folded, 2);
-            if ($stripped !== '') {
-                $folded = $stripped;
+        foreach (self::CONNECTORS as $connector) {
+            if (str_starts_with($folded, $connector)) {
+                $stripped = substr($folded, strlen($connector));
+                if ($stripped !== '') {
+                    $folded = $stripped;
+                    break;
+                }
             }
         }
         $compound = self::compoundFromWord($folded);
@@ -448,7 +501,7 @@ final class DutchPostcodeParser
         }
         $units = self::lookupMap($tokens[$index], self::UNITS);
         $next = $index + 1;
-        if ($units !== null && isset($tokens[$next]) && in_array(self::fold($tokens[$next]), ['en', 'ën'], true)) {
+        if ($units !== null && isset($tokens[$next]) && self::isConnector($tokens[$next])) {
             ++$next;
             $tens = isset($tokens[$next]) ? self::lookupMap($tokens[$next], self::TENS) : null;
             if ($tens !== null) {
@@ -468,11 +521,17 @@ final class DutchPostcodeParser
     private static function compoundFromWord(string $token): ?int
     {
         $folded = self::fold($token);
-        if (preg_match('/^(een|twee|drie|vier|vijf|zes|zeven|acht|negen)(?:en)?(twintig|dertig|veertig|vijftig|zestig|zeventig|tachtig|negentig)$/u', $folded, $match) !== 1) {
-            return null;
+        if (preg_match('/^(een|twee|drie|vier|vijf|zes|zeven|acht|negen)(?:en)?(twintig|dertig|veertig|vijftig|zestig|zeventig|tachtig|negentig)$/u', $folded, $match) === 1) {
+            return self::UNITS[$match[1]] + self::TENS[$match[2]];
+        }
+        if (preg_match('/^(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(one|two|three|four|five|six|seven|eight|nine)$/u', $folded, $match) === 1) {
+            return self::TENS[$match[1]] + self::UNITS[$match[2]];
+        }
+        if (preg_match('/^(ein|eins|zwei|drei|vier|funf|fuenf|sechs|sieben|acht|neun)und(zwanzig|dreissig|vierzig|funfzig|sechzig|siebzig|achtzig|neunzig)$/u', $folded, $match) === 1) {
+            return self::UNITS[$match[1]] + self::TENS[$match[2]];
         }
 
-        return self::UNITS[$match[1]] + self::TENS[$match[2]];
+        return null;
     }
 
     /**
@@ -489,7 +548,16 @@ final class DutchPostcodeParser
     {
         $lower = mb_strtolower($token);
 
-        return str_replace(['ë', 'é', 'è', 'ï'], ['e', 'e', 'e', 'i'], $lower);
+        return str_replace(
+            ['ë', 'é', 'è', 'ï', 'ä', 'ö', 'ü', 'ß', 'ı', 'ş', 'ğ', 'ç', 'â', 'î', 'ō', 'ū'],
+            ['e', 'e', 'e', 'i', 'a', 'o', 'u', 'ss', 'i', 's', 'g', 'c', 'a', 'i', 'o', 'u'],
+            $lower,
+        );
+    }
+
+    private static function isConnector(string $token): bool
+    {
+        return in_array(self::fold($token), self::CONNECTORS, true);
     }
 
     /**
@@ -555,7 +623,7 @@ final class DutchPostcodeParser
         $count = count($tokens);
         for ($i = 0; $i < $count; ++$i) {
             $keyword = mb_strtolower($tokens[$i]);
-            if (in_array($keyword, ['huisnummer', 'nummer', 'number'], true)) {
+            if (in_array($keyword, ['huisnummer', 'nummer', 'number', 'hausnummer', 'numara'], true)) {
                 $house = self::consumeDigitHouseNumber($tokens, $i + 1);
                 if ($house !== null) {
                     return $house['value'];

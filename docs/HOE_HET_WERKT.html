@@ -171,7 +171,7 @@
 <div class="layout">
 <nav>
   <h1>Woningtriage</h1>
-  <p>Werking v1 · branch do-app-platform · prompt conversation-v6</p>
+  <p>Werking v1 · branch do-app-platform · prompt conversation-v8</p>
   <a href="#overzicht">1. Overzicht</a>
   <a href="#wie-doet-wat">2. Wie doet wat</a>
   <a href="#architectuur">3. Architectuur</a>
@@ -228,7 +228,7 @@ flowchart LR
     <article class="card who ai">
       <h3>GPT-Live (het model)</h3>
       <ul>
-        <li>Praat Nederlands, groet meteen, één korte vraag per keer.</li>
+        <li>Groet in het Nederlands, daarna de taal van de bewoner; niet terugschakelen.</li>
         <li>Spraak-in en spraak-uit over WebRTC.</li>
         <li>Transcriptie (STT) en spraaksynthese (TTS).</li>
         <li>Delegeert feiten, adres en bevestigingen naar de backend.</li>
@@ -310,7 +310,7 @@ sequenceDiagram
   App->>API: POST /api/v1/intakes input_mode=voice
   App->>App: watchIntake elke 700ms
   App->>API: POST /intakes/{id}/voice-sessions sdp_offer
-  API->>OA: POST /v1/live/sessions<br/>instructions=conversation-v6<br/>delegation.type=client<br/>transport=webrtc
+  API->>OA: POST /v1/live/sessions<br/>instructions=conversation-v8<br/>delegation.type=client<br/>transport=webrtc
   OA-->>API: session id + sdp_answer
   API->>API: VoiceSession in Postgres, enqueue worker
   API-->>App: live=true + sdp_answer
@@ -369,7 +369,7 @@ sequenceDiagram
     alt dezelfde vraag als daarvoor
       W->>G: commentary: herhaal niet woordelijk, vraag anders
     else nieuwe vraag
-      W->>G: commentary: "Zeg nu hardop: {vraag}"
+      W->>G: commentary: zeg de vraag in de taal van de bewoner
     end
   end
   G->>B: gesproken vraag
@@ -396,7 +396,7 @@ OpenAI-Beta: live=v1
 {
   "session": {
     "model": "gpt-live-1",
-    "instructions": "&lt;conversation-v6&gt;",
+    "instructions": "&lt;conversation-v8&gt;",
     "delegation": { "type": "client" }
   },
   "transport": { "type": "webrtc", "sdp": "&lt;offer van de telefoon&gt;" }
@@ -427,11 +427,12 @@ OpenAI-Beta: live=v1
     <li><span class="chip">niet</span> Het model krijgt geen tool-resultaat als JSON terug. Het krijgt een <em>zin</em> in commentary: de volgende vraag die het hardop moet zeggen.</li>
     <li><span class="chip">niet</span> WCS wordt nooit door GPT-Live gebeld. Alleen de PHP-backend belt WCS.</li>
   </ul>
-  <h3>Prompt (conversation-v6), kernregels</h3>
+  <h3>Prompt (conversation-v8), kernregels</h3>
   <ul>
     <li>Altijd huurwoning; nooit huur/koop vragen.</li>
+    <li>Groet in het Nederlands; daarna de taal van de bewoner (EN/DE/TR/JA). Niet terug naar Nederlands.</li>
     <li>Eén korte vervolgvraag. Geen kamers, onderdelen of oorzaken verzinnen.</li>
-    <li>Postcode = 4 cijfers + 2 letters; cijfers als woorden; letters via spelalfabet (Simon Johan = SJ).</li>
+    <li>Postcode = 4 cijfers + 2 letters; cijfers als woorden in NL/EN/DE/TR/JA; letters via NATO of Simon Johan.</li>
     <li>Adreslookup delegeren. “Klopt”, “ja”, “oké” zijn bevestigingen — meteen delegeren.</li>
     <li>Samenvatting van de backend voorlezen. Niet zeggen dat het is opgeslagen tot <code>De melding is vastgelegd.</code></li>
     <li>Geen reparatie-advies, geen “monteur gestuurd”, geen planningstijd.</li>

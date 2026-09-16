@@ -186,12 +186,13 @@ final class LiveGatewayCommand extends Command
         $intake = $session->getIntake();
         $this->entityManager->refresh($intake);
         $previousQuestion = (string) ($intake->document()->nextQuestion['text'] ?? '');
+        $previousLanguage = $intake->getConversationLanguage();
         $this->log($output, 'delegation '.$delegationId.' transcript_chars='.mb_strlen($transcript).' text='.$this->clip($transcript));
         $this->sendEvent($client, [
             'type' => 'session.thinking.append',
             'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
             'delegation_id' => $delegationId !== '' ? $delegationId : null,
-            'content' => 'De backend zoekt of werkt het dossier bij. Wacht op het resultaat voordat je verder vraagt.',
+            'content' => \App\Live\LiveFollowUpSpeech::waitingOnBackend(),
         ]);
         $started = microtime(true);
         if (trim($transcript) === '') {
@@ -200,7 +201,7 @@ final class LiveGatewayCommand extends Command
                 'type' => 'session.commentary.append',
                 'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
                 'delegation_id' => $delegationId !== '' ? $delegationId : null,
-                'content' => 'Er is nog geen nieuw antwoord van de bewoner. Stel geen nieuwe vraag; wacht tot de bewoner spreekt.',
+                'content' => \App\Live\LiveFollowUpSpeech::noTranscript(),
             ]);
 
             return;
@@ -224,19 +225,27 @@ final class LiveGatewayCommand extends Command
         } catch (\Throwable $exception) {
             $this->log($output, 'analysis failed: '.$exception->getMessage());
         }
+        $language = $intake->getConversationLanguage();
+        if ($language !== $previousLanguage) {
+            $this->sendEvent($client, [
+                'type' => 'session.instructions.append',
+                'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
+                'delegation_id' => $delegationId !== '' ? $delegationId : null,
+                'content' => \App\Live\LiveFollowUpSpeech::switchInstructions($language),
+            ]);
+            $this->log($output, 'language switch '.$previousLanguage.' -> '.$language);
+        }
         $next = $intake->document()->nextQuestion['text'] ?? 'Gegevens zijn bijgewerkt.';
         $ms = (int) round((microtime(true) - $started) * 1000);
         $sameQuestion = $previousQuestion !== '' && $previousQuestion === $next;
-        $content = $sameQuestion
-            ? 'Het vorige antwoord is nog niet vastgelegd. Herhaal de vraag niet woordelijk. Vraag het in één andere korte zin: '.$next
-            : 'Zeg nu hardop tegen de bewoner, in het Nederlands: '.$next;
+        $content = \App\Live\LiveFollowUpSpeech::commentary((string) $next, $language, $sameQuestion);
         $this->sendEvent($client, [
             'type' => 'session.commentary.append',
             'event_id' => \App\Domain\IdGenerator::prefixed('evt'),
             'delegation_id' => $delegationId !== '' ? $delegationId : null,
             'content' => $content,
         ]);
-        $this->log($output, 'commentary sent in '.$ms.'ms question='.$this->clip($next));
+        $this->log($output, 'commentary sent in '.$ms.'ms language='.$language.' question='.$this->clip($next));
         $address = $intake->document()->address;
         if (!is_array($address)) {
             $address = [];

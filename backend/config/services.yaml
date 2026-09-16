@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../vendor/symfony/dependency-injection/Loader/schema/services.schema.json
 parameters:
     app.tree_dir: '%kernel.project_dir%/config/trees'
-    app.prompt_version: 'conversation-v6'
+    app.prompt_version: 'conversation-v8'
     app.live_model: 'gpt-live-1'
     env(OPENAI_API_KEY): ''
     env(WCS_ADDRESS_API_KEY): ''

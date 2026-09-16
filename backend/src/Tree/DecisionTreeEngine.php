@@ -113,8 +113,12 @@ final class DecisionTreeEngine
      */
     private function present(array $node, string $language, bool $reviewRequired): array
     {
-        $texts = $node['texts'] ?? [];
-        $text = $texts[$language] ?? $texts['nl-NL'] ?? $node['semantic'] ?? $node['text'] ?? '';
+        $texts = is_array($node['texts'] ?? null) ? $node['texts'] : [];
+        $text = $this->localizedText($texts, $language)
+            ?? (is_string($texts['nl-NL'] ?? null) ? $texts['nl-NL'] : null)
+            ?? $node['semantic']
+            ?? $node['text']
+            ?? '';
 
         return [
             'id' => (string) $node['id'],
@@ -124,5 +128,24 @@ final class DecisionTreeEngine
             'outcome' => $node['outcome'] ?? null,
             'review_required' => $reviewRequired || (($node['outcome'] ?? null) === 'human_review'),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $texts
+     */
+    private function localizedText(array $texts, string $language): ?string
+    {
+        $direct = $texts[$language] ?? null;
+        if (is_string($direct) && $direct !== '') {
+            return $direct;
+        }
+        $prefix = strtolower(substr($language, 0, 2));
+        foreach ($texts as $tag => $value) {
+            if (is_string($tag) && str_starts_with(strtolower($tag), $prefix) && is_string($value) && $value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
     }
 }
