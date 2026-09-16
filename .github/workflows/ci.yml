@@ -53,6 +53,10 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: android-actions/setup-android@v3
+        with:
+          # The obsolete SDK "tools" package is gone; installing it fails CI
+          # before Gradle runs. Platform-tools is enough; AGP fetches compileSdk.
+          packages: platform-tools
       - run: chmod +x gradlew
         working-directory: android
       - run: ./gradlew --no-daemon lintDebug testDebugUnitTest assembleDebug
