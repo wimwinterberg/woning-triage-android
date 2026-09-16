@@ -635,8 +635,8 @@ final class IntakeService
                 'id' => 'address_ask_postcode',
                 'target' => 'address',
                 'text' => $nl
-                    ? 'Wat is de postcode? Vier cijfers en twee letters; letters mag u spellen, zoals Simon Johan voor SJ.'
-                    : 'What is the postcode? Four digits and two letters; you may spell the letters, for example Simon Johan for SJ.',
+                    ? 'Wat is de postcode? Vier cijfers en twee letters; letters mag u spellen, zoals Simon Johan of Sierra Juliet voor SJ.'
+                    : 'What is the postcode? Four digits and two letters. You may say the digits as words, like three five seven three, and spell the letters as S J or Sierra Juliet for SJ.',
             ];
 
             return;
@@ -1000,7 +1000,7 @@ final class IntakeService
         }
 
         return preg_match(
-            '/verkeerd(e)?\s+(postcode|adres|huisnummer)|niet (mijn|het) adres|dat (is|klopt) niet|klopt niet|opnieuw beginnen|andere postcode|ander adres|niet de juiste/u',
+            '/verkeerd(e)?\s+(postcode|adres|huisnummer)|niet (mijn|het) adres|dat (is|klopt) niet|klopt niet|opnieuw beginnen|andere postcode|ander adres|niet de juiste|wrong (postcode|address|house number)|not my address|that(?:\'s| is) not (right|correct|my address)|start over|different postcode|falsche (postleitzahl|adresse)|yanlis/u',
             $normalized,
         ) === 1;
     }

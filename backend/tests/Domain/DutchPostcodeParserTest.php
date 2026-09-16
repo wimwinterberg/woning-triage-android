@@ -142,4 +142,51 @@ final class DutchPostcodeParserTest extends TestCase
         self::assertSame('8732 AJ', $parsed['postcode']);
         self::assertSame(393, $parsed['house_number']);
     }
+
+    public function testParsesEnglishDigitWordsAndNatoLetters(): void
+    {
+        $parsed = DutchPostcodeParser::parse('The postcode is three five seven three Sierra Juliet house number two zero seven');
+        self::assertSame('3573 SJ', $parsed['postcode']);
+        self::assertSame(207, $parsed['house_number']);
+    }
+
+    public function testParsesEnglishTensThenUnits(): void
+    {
+        $parsed = DutchPostcodeParser::parse('thirty five seventy three S J two hundred and seven');
+        self::assertSame('3573 SJ', $parsed['postcode']);
+        self::assertSame(207, $parsed['house_number']);
+    }
+
+    public function testParsesEnglishJayForJ(): void
+    {
+        $parsed = DutchPostcodeParser::parse('three five seven three ess jay two oh seven');
+        self::assertSame('3573 SJ', $parsed['postcode']);
+        self::assertSame(207, $parsed['house_number']);
+    }
+
+    public function testParsesGermanDigitWords(): void
+    {
+        $parsed = DutchPostcodeParser::parse('Die Postleitzahl ist drei fünf sieben drei Sierra Juliet Hausnummer zwei null sieben');
+        self::assertSame('3573 SJ', $parsed['postcode']);
+        self::assertSame(207, $parsed['house_number']);
+    }
+
+    public function testParsesTurkishDigitWords(): void
+    {
+        $parsed = DutchPostcodeParser::parse('otuz beş yetmiş üç Sierra Juliet iki sifir yedi');
+        self::assertSame('3573 SJ', $parsed['postcode']);
+        self::assertSame(207, $parsed['house_number']);
+    }
+
+    public function testParsesJapaneseKanaDigits(): void
+    {
+        $parsed = DutchPostcodeParser::parse('さん ご なな さん Sierra Juliet に ゼロ なな');
+        self::assertSame('3573 SJ', $parsed['postcode']);
+        self::assertSame(207, $parsed['house_number']);
+    }
+
+    public function testEnglishOnlyOneAddressClaim(): void
+    {
+        self::assertTrue(DutchPostcodeParser::claimsSingleAddress('There is only one address'));
+    }
 }

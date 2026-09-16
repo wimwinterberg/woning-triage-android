@@ -118,6 +118,18 @@ final class HeuristicIntakeAnalyzerTest extends TestCase
         self::assertSame(207, $proposal->addressHint['house_number']);
     }
 
+    public function testParsesEnglishSpokenPostcode(): void
+    {
+        $proposal = (new HeuristicIntakeAnalyzer())->analyze(
+            $this->intake('address'),
+            'The postcode is three five seven three Sierra Juliet two zero seven',
+            'msg-en',
+            0,
+        );
+        self::assertSame('3573 SJ', $proposal->addressHint['postcode']);
+        self::assertSame(207, $proposal->addressHint['house_number']);
+    }
+
     public function testParsesZeventigSttAs3573(): void
     {
         $proposal = (new HeuristicIntakeAnalyzer())->analyze(
