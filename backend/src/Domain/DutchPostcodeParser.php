@@ -70,7 +70,7 @@ final class DutchPostcodeParser
     ];
 
     /**
-     * @return array{postcode: ?string, house_number: ?int, addition: ?string}
+     * @return array{postcode: ?string, house_number: ?int, addition: ?string, street: ?string}
      */
     public static function parse(string $text): array
     {
@@ -101,9 +101,10 @@ final class DutchPostcodeParser
                 continue;
             }
             $cursor = self::skipStop($tokens, $cursor);
-            if ($cursor < $count && preg_match('/^[1-9][0-9]{0,4}$/', $tokens[$cursor])) {
-                $houseNumber = (int) $tokens[$cursor];
-                ++$cursor;
+            $house = self::consumeDigitHouseNumber($tokens, $cursor);
+            if ($house !== null) {
+                $houseNumber = $house['value'];
+                $cursor = $house['next'];
             }
             $cursor = self::skipStop($tokens, $cursor);
             if ($cursor < $count && self::isAddition($tokens[$cursor])) {
@@ -120,7 +121,29 @@ final class DutchPostcodeParser
             'postcode' => $postcode,
             'house_number' => $houseNumber,
             'addition' => $addition,
+            'street' => self::extractStreet($text),
         ];
+    }
+
+    public static function claimsSingleAddress(string $text): bool
+    {
+        $lower = mb_strtolower($text);
+
+        return (bool) preg_match('/er is maar (één|een|1) adres|slechts (één|een|1) adres/u', $lower);
+    }
+
+    private static function extractStreet(string $text): ?string
+    {
+        if (preg_match('/\b([A-Za-zÀ-ÿ]+(?:straat|laan|weg|plein|gracht|kade|singel|hof|dreef|pad|steeg|dijk|baan))\b/u', $text, $match) !== 1) {
+            return null;
+        }
+
+        $street = $match[1];
+        if (in_array(mb_strtolower($street), self::STOP, true)) {
+            return null;
+        }
+
+        return $street;
     }
 
     /**
@@ -342,10 +365,13 @@ final class DutchPostcodeParser
         $folded = self::fold($tokens[$index]);
         $hundreds = null;
         $next = $index + 1;
-        if (preg_match('/^(een|twee|drie|vier|vijf|zes|zeven|acht|negen)honderd$/u', $folded, $match) === 1) {
+        $remainder = '';
+        if (preg_match('/^(een|twee|drie|vier|vijf|zes|zeven|acht|negen)honderd(.*)$/u', $folded, $match) === 1) {
             $hundreds = self::UNITS[$match[1]] * 100;
-        } elseif ($folded === 'honderd') {
+            $remainder = $match[2];
+        } elseif (preg_match('/^honderd(.*)$/u', $folded, $match) === 1) {
             $hundreds = 100;
+            $remainder = $match[1];
         } else {
             $units = self::lookupMap($tokens[$index], self::UNITS);
             if ($units !== null && $units >= 1 && $units <= 9 && isset($tokens[$next]) && self::fold($tokens[$next]) === 'honderd') {
@@ -356,9 +382,39 @@ final class DutchPostcodeParser
         if ($hundreds === null) {
             return null;
         }
+        if ($remainder !== '') {
+            $extra = self::valueFromSpokenFragment($remainder);
+
+            return $extra === null ? null : ['value' => $hundreds + $extra, 'next' => $next];
+        }
         $extra = self::consumeSmallNumber($tokens, $next);
 
         return ['value' => $hundreds + $extra['value'], 'next' => $extra['next']];
+    }
+
+    private static function valueFromSpokenFragment(string $fragment): ?int
+    {
+        $folded = self::fold($fragment);
+        if (in_array($folded, ['en', 'n'], true)) {
+            return 0;
+        }
+        if (str_starts_with($folded, 'en')) {
+            $stripped = substr($folded, 2);
+            if ($stripped !== '') {
+                $folded = $stripped;
+            }
+        }
+        $compound = self::compoundFromWord($folded);
+        if ($compound !== null) {
+            return $compound;
+        }
+        foreach ([self::TEENS, self::TENS, self::UNITS] as $map) {
+            if (isset($map[$folded])) {
+                return $map[$folded];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -483,11 +539,20 @@ final class DutchPostcodeParser
         $count = count($tokens);
         for ($i = 0; $i < $count; ++$i) {
             $keyword = mb_strtolower($tokens[$i]);
-            if (in_array($keyword, ['huisnummer', 'nummer', 'number'], true)
-                && isset($tokens[$i + 1])
-                && preg_match('/^[1-9][0-9]{0,4}$/', $tokens[$i + 1])
-            ) {
-                return (int) $tokens[$i + 1];
+            if (in_array($keyword, ['huisnummer', 'nummer', 'number'], true)) {
+                $house = self::consumeDigitHouseNumber($tokens, $i + 1);
+                if ($house !== null) {
+                    return $house['value'];
+                }
+            }
+        }
+        for ($i = 0; $i < $count; ++$i) {
+            if (!self::isStreetToken($tokens[$i])) {
+                continue;
+            }
+            $house = self::consumeDigitHouseNumber($tokens, $i + 1);
+            if ($house !== null) {
+                return $house['value'];
             }
         }
         if ($count === 1 && preg_match('/^[1-9][0-9]{0,4}$/', $tokens[0]) === 1 && strlen($tokens[0]) < 4) {
@@ -495,5 +560,40 @@ final class DutchPostcodeParser
         }
 
         return null;
+    }
+
+    /**
+     * @param list<string> $tokens
+     * @return array{value: int, next: int}|null
+     */
+    private static function consumeDigitHouseNumber(array $tokens, int $index): ?array
+    {
+        $digits = [];
+        $cursor = $index;
+        while (isset($tokens[$cursor]) && preg_match('/^[0-9]{1,5}$/', $tokens[$cursor]) === 1) {
+            $digits[] = $tokens[$cursor];
+            ++$cursor;
+            if (strlen(implode('', $digits)) >= 5) {
+                break;
+            }
+        }
+        if ($digits === []) {
+            return null;
+        }
+        $joined = (int) implode('', $digits);
+        if ($joined < 1 || $joined > 99999) {
+            return null;
+        }
+
+        return ['value' => $joined, 'next' => $cursor];
+    }
+
+    private static function isStreetToken(string $token): bool
+    {
+        if (in_array(mb_strtolower($token), self::STOP, true)) {
+            return false;
+        }
+
+        return (bool) preg_match('/(straat|laan|weg|plein|gracht|kade|singel|hof|dreef|pad|steeg|dijk|baan)$/u', self::fold($token));
     }
 }

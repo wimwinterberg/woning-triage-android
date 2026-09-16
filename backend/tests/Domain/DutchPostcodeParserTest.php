@@ -92,4 +92,33 @@ final class DutchPostcodeParserTest extends TestCase
         self::assertSame('3573 SJ', $parsed['postcode']);
         self::assertSame(12, $parsed['house_number']);
     }
+
+    public function testParsesSpokenDigitsIncludingZero(): void
+    {
+        $parsed = DutchPostcodeParser::parse('Vijfendertig drieënzeventig Simon Johan, twee nul zeven');
+        self::assertSame('3573 SJ', $parsed['postcode']);
+        self::assertSame(207, $parsed['house_number']);
+    }
+
+    public function testParsesGluedSpokenHundredsAsHouseNumber(): void
+    {
+        $parsed = DutchPostcodeParser::parse('Tweehonderdzeven');
+        self::assertNull($parsed['postcode']);
+        self::assertSame(207, $parsed['house_number']);
+    }
+
+    public function testParsesSpokenPostcodeAndGluedHundredsTogether(): void
+    {
+        $parsed = DutchPostcodeParser::parse('Vijfendertig drieënzeventig Simon Johan. Tweehonderdzeven');
+        self::assertSame('3573 SJ', $parsed['postcode']);
+        self::assertSame(207, $parsed['house_number']);
+    }
+
+    public function testExtractsStreetAndSingleAddressClaim(): void
+    {
+        $parsed = DutchPostcodeParser::parse('Er is maar één adres. Oldeburgstraat tweehonderd zeven');
+        self::assertSame(207, $parsed['house_number']);
+        self::assertSame('Oldeburgstraat', $parsed['street']);
+        self::assertTrue(DutchPostcodeParser::claimsSingleAddress('Er is maar 1 adres. Oldeburgstraat tweehonderd zeven'));
+    }
 }

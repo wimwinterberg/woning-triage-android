@@ -184,14 +184,16 @@ final class HeuristicIntakeAnalyzer implements IntakeAnalyzer
     }
 
     /**
-     * @return array{postcode: ?string, house_number: ?int, addition: ?string}|null
+     * @return array{postcode: ?string, house_number: ?int, addition: ?string, street: ?string, unique_claim: bool}|null
      */
     private function extractAddress(string $text): ?array
     {
         $parsed = DutchPostcodeParser::parse($text);
-        if ($parsed['postcode'] === null && $parsed['house_number'] === null) {
+        $unique = DutchPostcodeParser::claimsSingleAddress($text);
+        if ($parsed['postcode'] === null && $parsed['house_number'] === null && $parsed['street'] === null && !$unique) {
             return null;
         }
+        $parsed['unique_claim'] = $unique;
 
         return $parsed;
     }

@@ -311,8 +311,10 @@ final class IntakeApiTest extends WebTestCase
         ], 'sp-4', 202);
         $intake = $this->getIntake($intake['id'], $this->tokenA);
         self::assertSame(12, $intake['address']['house_number']);
-        self::assertNotEmpty($intake['address']['candidates']);
-        self::assertSame('address_select', $intake['next_question']['id']);
+        self::assertCount(1, $intake['address']['candidates']);
+        self::assertNull($intake['address']['candidates'][0]['addition']);
+        self::assertStringStartsWith('address_confirm_', $intake['next_question']['id']);
+        self::assertStringContainsString('Voorbeeldstraat 12', $intake['next_question']['text']);
     }
 
     public function testAskedLocationStoresFreeTextWhenNoKeywordMatches(): void

@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Tests\Address;
 
+use App\Address\AddressLookupLogger;
 use App\Address\WcsAddressProvider;
 use App\Exception\AddressLookupUnavailableException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
@@ -122,6 +124,104 @@ final class WcsAddressProviderTest extends TestCase
         self::assertCount(1, $candidates);
         self::assertSame('NL', $candidates[0]->countryCode);
         self::assertSame('Museumplein', $candidates[0]->street);
+    }
+
+    public function testKeepsOnlyRequestedPostcodeAndHouseNumber(): void
+    {
+        $candidates = (new WcsAddressProvider($this->httpReturning(200, [
+            [
+                'country' => 'nl',
+                'postalCode' => '3573 SJ',
+                'houseNumber' => 207,
+                'houseLetter' => null,
+                'houseNumberAddition' => null,
+                'unitNumber' => null,
+                'street' => 'Oldenburgerstraat',
+                'city' => 'Utrecht',
+            ],
+            [
+                'country' => 'nl',
+                'postalCode' => '3511 AB',
+                'houseNumber' => 207,
+                'houseLetter' => null,
+                'houseNumberAddition' => null,
+                'unitNumber' => null,
+                'street' => 'Andere straat',
+                'city' => 'Utrecht',
+            ],
+            [
+                'country' => 'nl',
+                'postalCode' => '3573SJ',
+                'houseNumber' => 209,
+                'houseLetter' => null,
+                'houseNumberAddition' => null,
+                'unitNumber' => null,
+                'street' => 'Oldenburgerstraat',
+                'city' => 'Utrecht',
+            ],
+        ]), 'test-key'))->lookup('3573 SJ', 207, null);
+
+        self::assertCount(1, $candidates);
+        self::assertSame('Oldenburgerstraat', $candidates[0]->street);
+        self::assertSame('3573 SJ', $candidates[0]->postcode);
+        self::assertSame(207, $candidates[0]->houseNumber);
+        self::assertNull($candidates[0]->addition);
+    }
+
+    public function testAcceptsASingleAddressObjectPayload(): void
+    {
+        $candidates = (new WcsAddressProvider($this->httpReturning(200, [
+            'country' => 'nl',
+            'postalCode' => '3573 SJ',
+            'houseNumber' => 207,
+            'street' => 'Oldenburgerstraat',
+            'city' => 'Utrecht',
+        ]), 'test-key'))->lookup('3573 SJ', 207, null);
+
+        self::assertCount(1, $candidates);
+        self::assertSame('Oldenburgerstraat', $candidates[0]->street);
+    }
+
+    public function testLogsLookupOutcomeWithoutAddressPii(): void
+    {
+        $records = [];
+        $psr = $this->createStub(LoggerInterface::class);
+        $psr->method('info')->willReturnCallback(static function (string $message, array $context) use (&$records): void {
+            $records[] = ['message' => $message, 'context' => $context];
+        });
+
+        $candidates = (new WcsAddressProvider(
+            $this->httpReturning(200, [[
+                'country' => 'nl',
+                'postalCode' => '3573 SJ',
+                'houseNumber' => 207,
+                'street' => 'Oldenburgerstraat',
+                'city' => 'Utrecht',
+            ]]),
+            'test-key',
+            'https://address-api.createsolutions.dev',
+            new AddressLookupLogger($psr),
+        ))->lookup('3573 SJ', 207, null);
+
+        self::assertCount(1, $candidates);
+        self::assertNotEmpty($records);
+        $finished = null;
+        foreach ($records as $record) {
+            if (str_contains($record['message'], 'finished')) {
+                $finished = $record;
+                break;
+            }
+        }
+        self::assertNotNull($finished);
+        self::assertSame('wcs', $finished['context']['provider']);
+        self::assertSame(200, $finished['context']['http_status']);
+        self::assertSame(1, $finished['context']['item_count']);
+        self::assertSame(1, $finished['context']['candidate_count']);
+        self::assertSame(6, $finished['context']['compact_postcode_chars']);
+        self::assertArrayNotHasKey('postcode', $finished['context']);
+        self::assertArrayNotHasKey('url', $finished['context']);
+        self::assertArrayNotHasKey('street', $finished['context']);
+        self::assertArrayNotHasKey('house_number', $finished['context']);
     }
 
     public function testNotFoundReturnsEmptyList(): void
