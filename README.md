@@ -53,6 +53,38 @@ Postgres is alleen bereikbaar in het Docker-netwerk (niet op localhost:5432), zo
 
 Stoppen: `docker compose down`. Data blijft in het volume `database_data`.
 
+## Telefoon via ngrok
+
+De emulator gebruikt `http://10.0.2.2:8000/`. Een echte telefoon op 4G/wifi (niet hetzelfde LAN) bereikt je computer niet. Tunnel de API met [ngrok](https://ngrok.com/download).
+
+1. Start de backend (`docker compose up --build` of `php -S 127.0.0.1:8000 -t public`).
+2. Account + authtoken: [dashboard.ngrok.com](https://dashboard.ngrok.com/get-started/your-authtoken), daarna `ngrok config add-authtoken <token>`.
+3. Tunnel:
+
+```bash
+ngrok http 8000
+```
+
+Of via Docker (zelfde token in `backend/.env` als `NGROK_AUTHTOKEN=...`):
+
+```bash
+cd backend
+docker compose --profile ngrok up --build
+```
+
+De publieke HTTPS-URL staat in de ngrok-terminal of op http://127.0.0.1:4040 (eindigt op `.ngrok-free.app`).
+
+4. Bouw de app met die URL (slash op het eind mag ontbreken):
+
+```bash
+cd android
+./gradlew assembleDebug -PBACKEND_URL=https://JOUW-ID.ngrok-free.app/
+```
+
+Installeer `android/app/build/outputs/apk/debug/app-debug.apk` op de telefoon. Activatiecode: `docker compose exec api php bin/console woningtriage:create-user --label=pilot`.
+
+De debug-app stuurt `ngrok-skip-browser-warning` mee, anders antwoordt het gratis ngrok-plan met een HTML-waarschuwing in plaats van JSON. De tunnel is publiek zolang ngrok draait; deel de URL niet.
+
 ## Backend starten zonder Docker
 
 ```bash

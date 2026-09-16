@@ -38,8 +38,12 @@ class TokenStore(context: Context) {
 fun createApi(tokenStore: TokenStore): WoningtriageApi {
     val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
     val auth = Interceptor { chain ->
-        val builder = chain.request().newBuilder()
+        val request = chain.request()
+        val builder = request.newBuilder()
         tokenStore.accessToken?.let { builder.header("Authorization", "Bearer $it") }
+        if (isNgrokHost(request.url.host)) {
+            builder.header("ngrok-skip-browser-warning", "1")
+        }
         chain.proceed(builder.build())
     }
     val logging = HttpLoggingInterceptor().apply {
@@ -59,3 +63,6 @@ fun createApi(tokenStore: TokenStore): WoningtriageApi {
         .build()
         .create(WoningtriageApi::class.java)
 }
+
+internal fun isNgrokHost(host: String): Boolean =
+    host.contains("ngrok", ignoreCase = true)

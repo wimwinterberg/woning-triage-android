@@ -43,6 +43,7 @@ Classificatiecatalogus: importer `woningtriage:import-classification`. Productie
 - `backend/compose.yaml` start `api` (PHP 8.4 built-in server op poort 8000) en PostgreSQL 16.
 - Eerste start: `cd backend && docker compose up --build`. Entrypoint wacht op de database en draait `woningtriage:release`.
 - Live-gateway: `docker compose --profile live up --build`.
+- Telefoon: `ngrok http 8000`, daarna APK met `-PBACKEND_URL=https://….ngrok-free.app/`. De app zet `ngrok-skip-browser-warning` op die hosts.
 
 ## DigitalOcean App Platform
 
