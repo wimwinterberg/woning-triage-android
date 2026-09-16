@@ -3,6 +3,7 @@ package nl.woningtriage.app.ui
 import android.Manifest
 import android.content.res.Configuration
 import android.os.LocaleList
+import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -111,12 +112,25 @@ private fun AppLocale(tag: String, content: @Composable () -> Unit) {
         config.setLocales(LocaleList(locale))
         context.createConfigurationContext(config)
     }
-    CompositionLocalProvider(
-        LocalContext provides wrapped,
-        LocalConfiguration provides wrapped.resources.configuration,
-        LocalLayoutDirection provides if (UiLocale.isRtl(tag)) LayoutDirection.Rtl else LayoutDirection.Ltr,
-    ) {
-        content()
+    // createConfigurationContext() is not the Activity. rememberLauncherForActivityResult
+    // looks up LocalActivityResultRegistryOwner from LocalContext, so keep the Activity owner.
+    val layoutDirection = if (UiLocale.isRtl(tag)) LayoutDirection.Rtl else LayoutDirection.Ltr
+    val registryOwner = LocalActivityResultRegistryOwner.current
+    if (registryOwner != null) {
+        CompositionLocalProvider(
+            LocalContext provides wrapped,
+            LocalConfiguration provides wrapped.resources.configuration,
+            LocalLayoutDirection provides layoutDirection,
+            LocalActivityResultRegistryOwner provides registryOwner,
+            content = content,
+        )
+    } else {
+        CompositionLocalProvider(
+            LocalContext provides wrapped,
+            LocalConfiguration provides wrapped.resources.configuration,
+            LocalLayoutDirection provides layoutDirection,
+            content = content,
+        )
     }
 }
 
