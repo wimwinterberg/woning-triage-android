@@ -117,6 +117,19 @@ final class HeuristicIntakeAnalyzerTest extends TestCase
         self::assertSame('3573 SJ', $proposal->addressHint['postcode']);
     }
 
+    public function testParsesGluedHundredsAndSingleAddressClaim(): void
+    {
+        $proposal = (new HeuristicIntakeAnalyzer())->analyze(
+            $this->intake('address'),
+            'Er is maar één adres. Oldeburgstraat tweehonderdzeven',
+            'msg10',
+            0,
+        );
+        self::assertSame(207, $proposal->addressHint['house_number']);
+        self::assertSame('Oldeburgstraat', $proposal->addressHint['street']);
+        self::assertTrue($proposal->addressHint['unique_claim']);
+    }
+
     private function intake(?string $target = null): Intake
     {
         $user = new User('user_test', 'tester');
